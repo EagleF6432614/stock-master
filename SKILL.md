@@ -6,7 +6,7 @@ description: 综合性股票技术分析工具，小白友好。采用混合数�
 
 面向普通投资者的技术分析工具，用日常语言解释指标，给出明确买卖建议。
 
-> **GitHub**: https://github.com/EagleF6432614/stock-master-
+> **GitHub**: https://github.com/EagleF6432614/stock-master
 >
 > 如果觉得有用，请给个 Star ⭐
 
@@ -123,6 +123,9 @@ description: 综合性股票技术分析工具，小白友好。采用混合数�
 
 ## 详细文档
 
+- 投资智慧与哲学: [references/investment-wisdom.md](references/investment-wisdom.md)
+- Excel 持仓管理: [references/portfolio-guide.md](references/portfolio-guide.md)
+- 飞书同步指南: [references/feishu-guide.md](references/feishu-guide.md)
 - MCP 工具调用: [references/mcp-tools.md](references/mcp-tools.md)
 - 脚本详细说明: [references/scripts-guide.md](references/scripts-guide.md)
 - 更新日志: [references/changelog.md](references/changelog.md)

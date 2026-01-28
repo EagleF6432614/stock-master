@@ -1,7 +1,7 @@
 # Stock Master - 小白友好的股票技术分析工具
 
-[![GitHub stars](https://img.shields.io/github/stars/EagleF6432614/stock-master-?style=social)](https://github.com/EagleF6432614/stock-master-)
-[![GitHub forks](https://img.shields.io/github/forks/EagleF6432614/stock-master-?style=social)](https://github.com/EagleF6432614/stock-master-/fork)
+[![GitHub stars](https://img.shields.io/github/stars/EagleF6432614/stock-master?style=social)](https://github.com/EagleF6432614/stock-master)
+[![GitHub forks](https://img.shields.io/github/forks/EagleF6432614/stock-master?style=social)](https://github.com/EagleF6432614/stock-master/fork)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 面向普通投资者的技术分析工具，用日常语言解释复杂指标，给出明确买卖建议。
@@ -118,22 +118,36 @@ cp feishu_config.example.json feishu_config.json  # 如需飞书同步
 
 ```
 stock-master/
-├── SKILL.md              # Claude Skill 定义
-├── README.md             # 本文件
-├── requirements.txt      # Python 依赖
-├── config.example.json   # 配置模板
+├── SKILL.md                    # Claude Skill 定义
+├── README.md                   # 本文件
+├── LICENSE                     # MIT 许可证
+├── requirements.txt            # Python 依赖
+├── config.example.json         # 配置模板
 ├── feishu_config.example.json  # 飞书配置模板
 ├── scripts/
-│   ├── main.py           # 主分析器
-│   ├── indicators.py     # 技术指标计算
-│   ├── beginner_analyzer.py  # 小白友好报告生成
-│   ├── portfolio.py      # 持仓管理
-│   └── feishu_sync.py    # 飞书同步
+│   ├── main.py                 # 主分析器
+│   ├── indicators.py           # 技术指标计算
+│   ├── beginner_analyzer.py    # 小白友好报告生成
+│   ├── portfolio.py            # 持仓管理
+│   ├── feishu_sync.py          # 飞书同步
+│   └── feishu_init_tables.py   # 飞书表结构初始化
 └── references/
-    ├── mcp-tools.md      # MCP 工具使用指南
-    ├── scripts-guide.md  # 脚本详细说明
-    └── changelog.md      # 更新日志
+    ├── investment-wisdom.md    # 投资智慧与哲学
+    ├── portfolio-guide.md      # Excel 持仓管理指南
+    ├── feishu-guide.md         # 飞书同步详细指南
+    ├── mcp-tools.md            # MCP 工具使用指南
+    ├── scripts-guide.md        # 脚本详细说明
+    └── changelog.md            # 更新日志
 ```
+
+## 详细文档
+
+| 文档 | 说明 |
+|------|------|
+| [投资智慧](references/investment-wisdom.md) | 股民十大境界、交易原则、心态修炼 |
+| [持仓管理](references/portfolio-guide.md) | Excel 持仓表格使用指南 |
+| [飞书同步](references/feishu-guide.md) | 飞书多维表格配置与同步 |
+| [MCP 工具](references/mcp-tools.md) | Alpha Vantage API 调用指南 |
 
 ## 风险提示
 
