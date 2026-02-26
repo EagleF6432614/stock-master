@@ -1,12 +1,17 @@
 """
-技术指标本地计算模块 v3.4
+技术指标本地计算模块 v4.1
 
 功能：
 - 本地计算 RSI、布林带、ATR、均线等
 - 支持港股（当 Alpha Vantage 不可用时）
 - 提供优雅降级能力
 
-v3.4 新增:
+v4.1 新增:
+- Swing 高低点坐标输出（用于图表标注）
+- 趋势线计算（连接 swing 点）
+- 支撑阻力区域带（ATR 扩展）
+
+v3.4:
 - K线形态识别（锤子线、吞没、十字星、早晨之星等）
 - 趋势形态识别（双底、双顶、头肩顶、三角形等）
 
@@ -1675,6 +1680,196 @@ def calculate_position_size(
 
 
 # ============================================
+# 可视化数据函数 (v4.1)
+# ============================================
+
+def find_swing_points(
+    high: np.ndarray,
+    low: np.ndarray,
+    dates: list,
+    order: int = 5
+) -> List[Dict]:
+    """
+    识别 Swing 高低点并返回坐标（用于图表标注）
+
+    参数:
+        high: 最高价数组
+        low: 最低价数组
+        dates: 日期列表（字符串 YYYY-MM-DD）
+        order: 比较窗口大小，越大越少点位
+
+    返回:
+        swing 点列表 [{'date', 'price', 'type': 'high'|'low', 'index'}, ...]
+    """
+    if len(high) < order * 2 + 1:
+        return []
+
+    points = []
+
+    # 检测 Swing High
+    for i in range(order, len(high) - order):
+        is_swing_high = True
+        for j in range(1, order + 1):
+            if high[i] < high[i - j] or high[i] < high[i + j]:
+                is_swing_high = False
+                break
+        if is_swing_high:
+            date_str = dates[i] if isinstance(dates[i], str) else str(dates[i])[:10]
+            points.append({
+                'date': date_str,
+                'price': round(float(high[i]), 2),
+                'type': 'high',
+                'index': int(i)
+            })
+
+    # 检测 Swing Low
+    for i in range(order, len(low) - order):
+        is_swing_low = True
+        for j in range(1, order + 1):
+            if low[i] > low[i - j] or low[i] > low[i + j]:
+                is_swing_low = False
+                break
+        if is_swing_low:
+            date_str = dates[i] if isinstance(dates[i], str) else str(dates[i])[:10]
+            points.append({
+                'date': date_str,
+                'price': round(float(low[i]), 2),
+                'type': 'low',
+                'index': int(i)
+            })
+
+    # 按时间排序
+    points.sort(key=lambda p: p['index'])
+    return points
+
+
+def calculate_trend_lines(
+    swing_points: List[Dict],
+    high: np.ndarray,
+    low: np.ndarray,
+    dates: list
+) -> Dict[str, Any]:
+    """
+    从 swing 点计算趋势线
+
+    连接最近的两个 swing high → 阻力趋势线
+    连接最近的两个 swing low → 支撑趋势线
+
+    返回:
+        {
+            'upper_trend': {'start': {date, price}, 'end': {date, price}, 'slope', 'direction'},
+            'lower_trend': {'start': {date, price}, 'end': {date, price}, 'slope', 'direction'},
+            'channel_type': 'ascending' | 'descending' | 'sideways' | 'converging',
+        }
+    """
+    result = {
+        'upper_trend': None,
+        'lower_trend': None,
+        'channel_type': 'sideways'
+    }
+
+    swing_highs = [p for p in swing_points if p['type'] == 'high']
+    swing_lows = [p for p in swing_points if p['type'] == 'low']
+
+    # 上趋势线（连接最近两个 swing high）
+    if len(swing_highs) >= 2:
+        h1 = swing_highs[-2]
+        h2 = swing_highs[-1]
+        idx_diff = h2['index'] - h1['index']
+        if idx_diff > 0:
+            slope = (h2['price'] - h1['price']) / idx_diff
+            result['upper_trend'] = {
+                'start': {'date': h1['date'], 'price': h1['price']},
+                'end': {'date': h2['date'], 'price': h2['price']},
+                'slope': round(slope, 4),
+                'direction': 'up' if slope > 0 else 'down' if slope < 0 else 'flat'
+            }
+
+    # 下趋势线（连接最近两个 swing low）
+    if len(swing_lows) >= 2:
+        l1 = swing_lows[-2]
+        l2 = swing_lows[-1]
+        idx_diff = l2['index'] - l1['index']
+        if idx_diff > 0:
+            slope = (l2['price'] - l1['price']) / idx_diff
+            result['lower_trend'] = {
+                'start': {'date': l1['date'], 'price': l1['price']},
+                'end': {'date': l2['date'], 'price': l2['price']},
+                'slope': round(slope, 4),
+                'direction': 'up' if slope > 0 else 'down' if slope < 0 else 'flat'
+            }
+
+    # 判断通道类型
+    upper = result['upper_trend']
+    lower = result['lower_trend']
+    if upper and lower:
+        u_slope = upper['slope']
+        l_slope = lower['slope']
+        if u_slope > 0 and l_slope > 0:
+            result['channel_type'] = 'ascending'
+        elif u_slope < 0 and l_slope < 0:
+            result['channel_type'] = 'descending'
+        elif (u_slope < 0 and l_slope > 0) or (u_slope > 0 and l_slope < 0):
+            result['channel_type'] = 'converging'
+        else:
+            result['channel_type'] = 'sideways'
+    elif upper:
+        result['channel_type'] = 'ascending' if upper['slope'] > 0 else 'descending'
+    elif lower:
+        result['channel_type'] = 'ascending' if lower['slope'] > 0 else 'descending'
+
+    return result
+
+
+def calculate_sr_zones(
+    supports: List[Dict],
+    resistances: List[Dict],
+    atr: float
+) -> List[Dict]:
+    """
+    将单一支撑/阻力价格扩展为带宽区域
+
+    用 ATR 的 30% 作为区域半宽度
+
+    参数:
+        supports: 支撑位列表 [{'price', 'type', 'strength'}, ...]
+        resistances: 阻力位列表 [{'price', 'type', 'strength'}, ...]
+        atr: ATR 值
+
+    返回:
+        区域列表 [{'upper', 'lower', 'center', 'type', 'label', 'strength'}, ...]
+    """
+    zones = []
+    half_width = atr * 0.3 if atr and atr > 0 else 0
+
+    # 支撑区域（取前 3 个最近的）
+    for s in supports[:3]:
+        price = s['price']
+        zones.append({
+            'upper': round(price + half_width, 2),
+            'lower': round(price - half_width, 2),
+            'center': round(price, 2),
+            'type': 'support',
+            'label': s.get('type', 'Support'),
+            'strength': s.get('strength', 'medium')
+        })
+
+    # 阻力区域（取前 3 个最近的）
+    for r in resistances[:3]:
+        price = r['price']
+        zones.append({
+            'upper': round(price + half_width, 2),
+            'lower': round(price - half_width, 2),
+            'center': round(price, 2),
+            'type': 'resistance',
+            'label': r.get('type', 'Resistance'),
+            'strength': r.get('strength', 'medium')
+        })
+
+    return zones
+
+
+# ============================================
 # 综合分析函数
 # ============================================
 
@@ -1728,6 +1923,16 @@ def analyze_stock_local(ticker: str, period: str = '3mo') -> Dict[str, Any]:
     # 动态止损
     stop_loss_data = calculate_dynamic_stop_loss(current_price, atr, action='BUY')
 
+    # === v4.1 可视化数据 ===
+    date_strs = [str(d)[:10] for d in data['dates']]
+    swing_points = find_swing_points(high, low, date_strs, order=5)
+    trend_lines = calculate_trend_lines(swing_points, high, low, date_strs)
+    sr_zones = calculate_sr_zones(
+        support_resistance.get('supports', []),
+        support_resistance.get('resistances', []),
+        atr
+    )
+
     return {
         'ticker': ticker.upper(),
         'current_price': current_price,
@@ -1758,6 +1963,11 @@ def analyze_stock_local(ticker: str, period: str = '3mo') -> Dict[str, Any]:
         'prices': {
             'close_1m': close[-20:].tolist() if len(close) >= 20 else close.tolist(),
             'close_3m': close.tolist()
+        },
+        'visualization': {  # v4.1
+            'swing_points': swing_points,
+            'trend_lines': trend_lines,
+            'sr_zones': sr_zones,
         }
     }
 

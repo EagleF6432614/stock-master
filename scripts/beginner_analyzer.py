@@ -55,6 +55,8 @@ class TradingSignal:
     # v3.4 形态识别
     patterns_signal: Optional[str] = None  # 形态综合信号
     patterns_count: Optional[int] = None  # 识别到的形态数量
+    # v4.2 评分明细
+    score_breakdown: List[Dict] = field(default_factory=list)  # [{'indicator','value','signal','score'}]
 
 
 def explain_rsi_simple(rsi: float) -> str:
@@ -474,131 +476,169 @@ def generate_trading_recommendation(
     13. [v3.4] K线形态 + 趋势形态
     """
     reasons = []
+    breakdown = []  # v4.2 评分明细
     buy_score = 0  # 正数倾向买入，负数倾向卖出
 
     # === RSI 分析 ===
     if rsi < 30:
         buy_score += 3
         reasons.append("✅ RSI 超卖 (<30)，股价可能跌过头")
+        breakdown.append({'indicator': 'RSI', 'value': f'{rsi:.1f}', 'signal': '超卖', 'score': 3})
     elif rsi < 40:
         buy_score += 1
         reasons.append("📍 RSI 偏低，股价相对便宜")
+        breakdown.append({'indicator': 'RSI', 'value': f'{rsi:.1f}', 'signal': '偏低', 'score': 1})
     elif rsi > 70:
         buy_score -= 3
         reasons.append("⚠️ RSI 超买 (>70)，股价可能涨过头")
+        breakdown.append({'indicator': 'RSI', 'value': f'{rsi:.1f}', 'signal': '超买', 'score': -3})
     elif rsi > 60:
         buy_score -= 1
         reasons.append("📍 RSI 偏高，追高需谨慎")
+        breakdown.append({'indicator': 'RSI', 'value': f'{rsi:.1f}', 'signal': '偏高', 'score': -1})
+    else:
+        breakdown.append({'indicator': 'RSI', 'value': f'{rsi:.1f}', 'signal': '中性', 'score': 0})
 
     # === MACD 分析 ===
     if macd_histogram > 0 and prev_macd_histogram <= 0:
         buy_score += 3
         reasons.append("✅ MACD 金叉，上涨动能启动")
+        breakdown.append({'indicator': 'MACD', 'value': f'{macd_histogram:.4f}', 'signal': '金叉', 'score': 3})
     elif macd_histogram < 0 and prev_macd_histogram >= 0:
         buy_score -= 3
         reasons.append("⚠️ MACD 死叉，下跌动能启动")
+        breakdown.append({'indicator': 'MACD', 'value': f'{macd_histogram:.4f}', 'signal': '死叉', 'score': -3})
     elif macd_histogram > 0:
         buy_score += 1
         reasons.append("📍 MACD 多头趋势")
+        breakdown.append({'indicator': 'MACD', 'value': f'{macd_histogram:.4f}', 'signal': '多头趋势', 'score': 1})
     else:
         buy_score -= 1
         reasons.append("📍 MACD 空头趋势")
+        breakdown.append({'indicator': 'MACD', 'value': f'{macd_histogram:.4f}', 'signal': '空头趋势', 'score': -1})
 
     # === 布林带分析 ===
     if current_price < bb_lower:
         buy_score += 2
         reasons.append("✅ 跌破布林带下轨，可能超跌反弹")
+        breakdown.append({'indicator': '布林带', 'value': f'{current_price:.2f}', 'signal': '跌破下轨', 'score': 2})
     elif current_price < bb_lower + (bb_middle - bb_lower) * 0.3:
         buy_score += 1
         reasons.append("📍 接近布林带下轨，相对低位")
+        breakdown.append({'indicator': '布林带', 'value': f'{current_price:.2f}', 'signal': '接近下轨', 'score': 1})
     elif current_price > bb_upper:
         buy_score -= 2
         reasons.append("⚠️ 突破布林带上轨，可能回调")
+        breakdown.append({'indicator': '布林带', 'value': f'{current_price:.2f}', 'signal': '突破上轨', 'score': -2})
     elif current_price > bb_upper - (bb_upper - bb_middle) * 0.3:
         buy_score -= 1
         reasons.append("📍 接近布林带上轨，追高风险")
+        breakdown.append({'indicator': '布林带', 'value': f'{current_price:.2f}', 'signal': '接近上轨', 'score': -1})
+    else:
+        breakdown.append({'indicator': '布林带', 'value': f'{current_price:.2f}', 'signal': '正常区间', 'score': 0})
 
     # === KDJ 分析 (v3.3 新增) ===
     if kdj_signal:
         if kdj_signal == 'golden_cross':
             buy_score += 3
             reasons.append("✅ KDJ 金叉，短期买入信号")
+            breakdown.append({'indicator': 'KDJ', 'value': f'{kdj_k:.1f}', 'signal': '金叉', 'score': 3})
         elif kdj_signal == 'death_cross':
             buy_score -= 3
             reasons.append("⚠️ KDJ 死叉，短期卖出信号")
+            breakdown.append({'indicator': 'KDJ', 'value': f'{kdj_k:.1f}', 'signal': '死叉', 'score': -3})
         elif kdj_signal in ['oversold', 'low_zone']:
             buy_score += 2
             reasons.append("✅ KDJ 超卖，短期可能反弹")
+            breakdown.append({'indicator': 'KDJ', 'value': f'{kdj_k:.1f}', 'signal': '超卖', 'score': 2})
         elif kdj_signal in ['overbought', 'high_zone']:
             buy_score -= 2
             reasons.append("⚠️ KDJ 超买，短期可能回调")
+            breakdown.append({'indicator': 'KDJ', 'value': f'{kdj_k:.1f}', 'signal': '超买', 'score': -2})
 
     # === 背离分析 (v3.3 新增) - 背离是强信号 ===
     if macd_divergence == 'bullish':
         buy_score += 4
         reasons.append("🔥 MACD 底背离，强烈反弹信号")
+        breakdown.append({'indicator': 'MACD背离', 'value': '', 'signal': '底背离', 'score': 4})
     elif macd_divergence == 'bearish':
         buy_score -= 4
         reasons.append("🔥 MACD 顶背离，强烈回调信号")
+        breakdown.append({'indicator': 'MACD背离', 'value': '', 'signal': '顶背离', 'score': -4})
 
     if rsi_divergence == 'bullish':
         buy_score += 3
         reasons.append("✅ RSI 底背离，动能转强")
+        breakdown.append({'indicator': 'RSI背离', 'value': '', 'signal': '底背离', 'score': 3})
     elif rsi_divergence == 'bearish':
         buy_score -= 3
         reasons.append("⚠️ RSI 顶背离，动能转弱")
+        breakdown.append({'indicator': 'RSI背离', 'value': '', 'signal': '顶背离', 'score': -3})
 
     # === OBV 分析 (v3.3 新增) ===
     if obv_signal:
         if obv_signal == 'bullish_divergence':
             buy_score += 2
             reasons.append("📊 OBV 底背离，资金悄悄流入")
+            breakdown.append({'indicator': 'OBV', 'value': '', 'signal': '底背离', 'score': 2})
         elif obv_signal == 'bearish_divergence':
             buy_score -= 2
             reasons.append("📊 OBV 顶背离，资金悄悄流出")
+            breakdown.append({'indicator': 'OBV', 'value': '', 'signal': '顶背离', 'score': -2})
         elif obv_signal == 'confirmed_up':
             buy_score += 1
             reasons.append("📊 OBV 确认上涨趋势")
+            breakdown.append({'indicator': 'OBV', 'value': '', 'signal': '确认上涨', 'score': 1})
         elif obv_signal == 'confirmed_down':
             buy_score -= 1
             reasons.append("📊 OBV 确认下跌趋势")
+            breakdown.append({'indicator': 'OBV', 'value': '', 'signal': '确认下跌', 'score': -1})
 
     # === 威廉指标/乖离率 (v3.3 新增) ===
     if williams_signal == 'oversold':
         buy_score += 1
         reasons.append("📍 威廉指标超卖")
+        breakdown.append({'indicator': '威廉指标', 'value': '', 'signal': '超卖', 'score': 1})
     elif williams_signal == 'overbought':
         buy_score -= 1
         reasons.append("📍 威廉指标超买")
+        breakdown.append({'indicator': '威廉指标', 'value': '', 'signal': '超买', 'score': -1})
 
     if bias_signal == 'oversold':
         buy_score += 1
         reasons.append("📍 乖离率偏低，可能反弹")
+        breakdown.append({'indicator': '乖离率', 'value': '', 'signal': '偏低', 'score': 1})
     elif bias_signal == 'overbought':
         buy_score -= 1
         reasons.append("📍 乖离率偏高，可能回调")
+        breakdown.append({'indicator': '乖离率', 'value': '', 'signal': '偏高', 'score': -1})
 
     # === 成交量分析 ===
     if volume_signal:
         if volume_signal == "bullish" and volume_ratio and volume_ratio > 1.5:
             buy_score += 2
             reasons.append(f"📊 放量上涨 (量比 {volume_ratio:.1f})，买盘积极")
+            breakdown.append({'indicator': '成交量', 'value': f'{volume_ratio:.1f}', 'signal': '放量上涨', 'score': 2})
         elif volume_signal == "bearish" and volume_ratio and volume_ratio > 1.5:
             buy_score -= 2
             reasons.append(f"📊 放量下跌 (量比 {volume_ratio:.1f})，卖压较大")
+            breakdown.append({'indicator': '成交量', 'value': f'{volume_ratio:.1f}', 'signal': '放量下跌', 'score': -2})
         elif volume_signal == "neutral" and volume_ratio and volume_ratio < 0.7:
             if macd_histogram < 0:
                 buy_score += 1
                 reasons.append(f"📊 缩量下跌 (量比 {volume_ratio:.1f})，卖压减轻")
+                breakdown.append({'indicator': '成交量', 'value': f'{volume_ratio:.1f}', 'signal': '缩量下跌', 'score': 1})
 
     # === 均线分析 ===
     if ma_arrangement:
         if ma_arrangement == "多头排列":
             buy_score += 2
             reasons.append("📈 均线多头排列，趋势向上")
+            breakdown.append({'indicator': '均线', 'value': '', 'signal': '多头排列', 'score': 2})
         elif ma_arrangement == "空头排列":
             buy_score -= 2
             reasons.append("📉 均线空头排列，趋势向下")
+            breakdown.append({'indicator': '均线', 'value': '', 'signal': '空头排列', 'score': -2})
 
     # === 趋势分析 ===
     if prices_1m and len(prices_1m) >= 5:
@@ -606,9 +646,11 @@ def generate_trading_recommendation(
         if change_1m < -15:
             buy_score += 1
             reasons.append(f"📍 近1月跌幅较大 ({change_1m:.1f}%)，可能超跌")
+            breakdown.append({'indicator': '趋势', 'value': f'{change_1m:.1f}%', 'signal': '近期跌幅大', 'score': 1})
         elif change_1m > 15:
             buy_score -= 1
             reasons.append(f"📍 近1月涨幅较大 ({change_1m:.1f}%)，注意追高")
+            breakdown.append({'indicator': '趋势', 'value': f'{change_1m:.1f}%', 'signal': '近期涨幅大', 'score': -1})
 
     # === 支撑阻力位分析 (v3.3 新增) ===
     if nearest_support and nearest_resistance:
@@ -618,9 +660,11 @@ def generate_trading_recommendation(
         if support_distance < 3:  # 接近支撑位
             buy_score += 1
             reasons.append(f"📍 接近支撑位 ${nearest_support:.2f}，可能有支撑")
+            breakdown.append({'indicator': '支撑阻力', 'value': f'${nearest_support:.2f}', 'signal': '接近支撑', 'score': 1})
         if resist_distance < 3:  # 接近阻力位
             buy_score -= 1
             reasons.append(f"📍 接近阻力位 ${nearest_resistance:.2f}，可能有压力")
+            breakdown.append({'indicator': '支撑阻力', 'value': f'${nearest_resistance:.2f}', 'signal': '接近阻力', 'score': -1})
 
     # === 形态识别分析 (v3.4 新增) ===
     if patterns_data:
@@ -647,29 +691,35 @@ def generate_trading_recommendation(
                     buy_score += 3
                     cn_name = CANDLESTICK_NAMES.get(p_name) or CHART_PATTERN_NAMES.get(p_name, p_name)
                     reasons.append(f"🔥 {cn_name}形态，强看涨信号")
+                    breakdown.append({'indicator': f'{cn_name}形态', 'value': '', 'signal': '强看涨', 'score': 3})
                 elif p_signal == 'bearish':
                     buy_score -= 3
                     cn_name = CANDLESTICK_NAMES.get(p_name) or CHART_PATTERN_NAMES.get(p_name, p_name)
                     reasons.append(f"🔥 {cn_name}形态，强看跌信号")
+                    breakdown.append({'indicator': f'{cn_name}形态', 'value': '', 'signal': '强看跌', 'score': -3})
             elif p_name in medium_patterns:
                 if p_signal == 'bullish':
                     buy_score += 2
                     cn_name = CANDLESTICK_NAMES.get(p_name) or CHART_PATTERN_NAMES.get(p_name, p_name)
                     reasons.append(f"✅ {cn_name}形态，看涨信号")
+                    breakdown.append({'indicator': f'{cn_name}形态', 'value': '', 'signal': '看涨', 'score': 2})
                 elif p_signal == 'bearish':
                     buy_score -= 2
                     cn_name = CANDLESTICK_NAMES.get(p_name) or CHART_PATTERN_NAMES.get(p_name, p_name)
                     reasons.append(f"⚠️ {cn_name}形态，看跌信号")
+                    breakdown.append({'indicator': f'{cn_name}形态', 'value': '', 'signal': '看跌', 'score': -2})
             else:
                 # 弱信号形态（锤子线、十字星等）
                 if p_signal == 'bullish':
                     buy_score += 1
                     cn_name = CANDLESTICK_NAMES.get(p_name) or CHART_PATTERN_NAMES.get(p_name, p_name)
                     reasons.append(f"📍 {cn_name}形态出现")
+                    breakdown.append({'indicator': f'{cn_name}形态', 'value': '', 'signal': '看涨', 'score': 1})
                 elif p_signal == 'bearish':
                     buy_score -= 1
                     cn_name = CANDLESTICK_NAMES.get(p_name) or CHART_PATTERN_NAMES.get(p_name, p_name)
                     reasons.append(f"📍 {cn_name}形态出现")
+                    breakdown.append({'indicator': f'{cn_name}形态', 'value': '', 'signal': '看跌', 'score': -1})
 
     # === 生成建议 (v3.4 调整阈值) ===
     if buy_score >= 6:
@@ -755,7 +805,8 @@ def generate_trading_recommendation(
         obv_signal=obv_signal,
         support_price=nearest_support,
         resistance_price=nearest_resistance,
-        score=buy_score
+        score=buy_score,
+        score_breakdown=breakdown
     )
 
 
@@ -923,3 +974,65 @@ def format_detailed_report(
 """
 
     return report
+
+
+# ============================================
+# v4.0 HTML 报告入口
+# ============================================
+
+def generate_html_report(
+    ticker: str,
+    name: str,
+    analysis_result: Dict,
+    signal: TradingSignal,
+    stock_data: Dict,
+    polymarket_data: Optional[Dict] = None,
+    report_type: str = 'detailed'
+) -> str:
+    """
+    生成交互式 HTML 报告。
+
+    失败时回退到 format_detailed_report() 并返回 Markdown 字符串。
+
+    返回: HTML 文件的绝对路径（成功时）或 Markdown 字符串（失败时）
+    """
+    try:
+        import sys
+        import os as _os
+        skill_scripts = _os.path.dirname(_os.path.abspath(__file__))
+        if skill_scripts not in sys.path:
+            sys.path.insert(0, skill_scripts)
+        from html_report import HTMLReportGenerator
+        gen = HTMLReportGenerator()
+        return gen.generate(
+            ticker=ticker,
+            name=name,
+            analysis_result=analysis_result,
+            signal=signal,
+            stock_data=stock_data,
+            polymarket_data=polymarket_data,
+            report_type=report_type
+        )
+    except Exception as e:
+        print(f"[HTML报告] 生成失败，回退到 Markdown: {e}")
+        indicators = analysis_result.get('indicators', {})
+        macd = indicators.get('macd', {})
+        bb = indicators.get('bbands', {})
+        prices = analysis_result.get('prices', {})
+        return format_detailed_report(
+            ticker=ticker,
+            name=name,
+            current_price=analysis_result.get('current_price', 0),
+            change_pct=0,
+            rsi=indicators.get('rsi', 50),
+            macd_line=macd.get('macd_line', 0),
+            signal_line=macd.get('signal_line', 0),
+            macd_histogram=macd.get('histogram', 0),
+            prev_macd_histogram=macd.get('prev_histogram', 0),
+            bb_upper=bb.get('upper', 0) if isinstance(bb, dict) else 0,
+            bb_middle=bb.get('middle', 0) if isinstance(bb, dict) else 0,
+            bb_lower=bb.get('lower', 0) if isinstance(bb, dict) else 0,
+            prices_1m=prices.get('close_1m', []),
+            prices_3m=prices.get('close_3m', []),
+            signal=signal
+        )

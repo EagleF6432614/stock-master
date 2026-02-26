@@ -1,4 +1,4 @@
-# Stock Master - 小白友好的股票技术分析工具
+# Stock Master v1.5 - 小白友好的股票技术分析工具
 
 [![GitHub stars](https://img.shields.io/github/stars/EagleF6432614/stock-master?style=social)](https://github.com/EagleF6432614/stock-master)
 [![GitHub forks](https://img.shields.io/github/forks/EagleF6432614/stock-master?style=social)](https://github.com/EagleF6432614/stock-master/fork)
@@ -6,14 +6,53 @@
 
 面向普通投资者的技术分析工具，用日常语言解释复杂指标，给出明确买卖建议。
 
+## v1.5 更新亮点
+
+### 交互式 TradingView 图表报告 (NEW)
+- 基于 **TradingView Lightweight Charts v4** 的交互式 HTML 报告
+- K线图 + MA均线/布林带/支撑阻力/Swing标注/趋势线/斐波那契（可切换）
+- 成交量/MACD/RSI 子图，四图联动缩放
+- 评分仪表盘（-10 ~ +10 可视化弧形表盘）
+- 一键跳转 TradingView 查看实时行情
+
+### 图表指标 Toggle 开关 (NEW)
+- 药丸形按钮工具栏：均线 | 布林带 | 支撑阻力 | Swing标注 | 趋势线 | 斐波那契
+- 默认只开启均线，图表干净，用户按需叠加
+
+### 小白分析增强 (NEW)
+- **评分明细表** — 每个指标的信号和得分贡献一目了然
+- **小白技术解读卡片** — 用通俗比喻解释每个指标（"踩油门加速"、"弹簧压太紧"）
+- **关键价位表** — 止损/支撑/阻力/目标价格 + 颜色编码
+- **操作建议区** — 根据信号强度给出具体策略步骤
+
+### 图表可视化升级 (NEW)
+- 支撑阻力色带（Canvas overlay，跟随缩放重绘）
+- Swing 高低点标注
+- 上升/下降趋势线
+- 布林带半透明填充
+- 趋势方向徽章（▲上升/▼下降/◆收敛/─横盘）
+
+### API 容错与智能降级 (NEW)
+- Alpha Vantage 调用失败自动降级到本地计算
+- Yahoo Finance 超时重试（指数退避）
+- 异常量价信号检测（放量/缩量/波动异常）
+
+### 投资智慧模块 (NEW)
+- 根据买卖信号自动匹配相关投资智慧语录
+- 融入个人投资感悟，作为决策佐证
+
+---
+
 ## 特性
 
 - **小白友好**: 用通俗语言解释 RSI、MACD、KDJ 等指标
+- **交互式图表**: TradingView 风格的 HTML 可视化报告，指标可切换
 - **混合数据源**: Yahoo Finance (实时) + Alpha Vantage MCP (专业指标)
 - **多市场支持**: 美股、港股、A股（接受导入Api)
 - **持仓管理**: Excel 表格管理，自动计算盈亏
 - **飞书同步**: 支持同步到飞书多维表格
 - **形态识别**: K线形态 + 趋势形态自动识别
+- **智能容错**: API 失败自动降级，异常信号检测
 
 ## 安装方式
 
@@ -153,8 +192,9 @@ stock-master/
 ├── feishu_config.example.json  # 飞书配置模板
 ├── scripts/
 │   ├── main.py                 # 主分析器
-│   ├── indicators.py           # 技术指标计算
-│   ├── beginner_analyzer.py    # 小白友好报告生成
+│   ├── indicators.py           # 技术指标计算（含 Swing/趋势线/S-R色带）
+│   ├── beginner_analyzer.py    # 小白友好报告生成（含评分明细）
+│   ├── html_report.py          # [v1.5 NEW] 交互式 HTML 可视化报告
 │   ├── portfolio.py            # 持仓管理
 │   ├── feishu_sync.py          # 飞书同步
 │   └── feishu_init_tables.py   # 飞书表结构初始化

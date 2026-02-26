@@ -6,37 +6,12 @@
 - 读取持仓数据
 - 计算实时盈亏
 - 记录交易历史
-
-配置说明：
-通过环境变量 PORTFOLIO_PATH 或 config.json 配置持仓文件路径
 """
 
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 from pathlib import Path
 import json
-import os
-
-
-def get_portfolio_path(output_path: str = None) -> Path:
-    """获取持仓文件路径"""
-    if output_path:
-        return Path(output_path)
-
-    # 优先使用环境变量
-    if os.environ.get('PORTFOLIO_PATH'):
-        return Path(os.environ['PORTFOLIO_PATH'])
-
-    # 其次使用配置文件
-    config_path = Path('./config.json')
-    if config_path.exists():
-        with open(config_path, 'r', encoding='utf-8') as f:
-            config = json.load(f)
-            if config.get('portfolio_path'):
-                return Path(config['portfolio_path'])
-
-    # 默认使用当前目录
-    return Path('./my_portfolio.xlsx')
 
 
 def create_portfolio_template(output_path: str = None) -> str:
@@ -56,8 +31,13 @@ def create_portfolio_template(output_path: str = None) -> str:
     except ImportError:
         raise ImportError("请安装 openpyxl: pip install openpyxl")
 
-    output_path = get_portfolio_path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if output_path is None:
+        # 默认存储路径
+        default_dir = Path("/Users/liyanda/Desktop/AI编程/stock master")
+        default_dir.mkdir(parents=True, exist_ok=True)
+        output_path = default_dir / "my_portfolio.xlsx"
+    else:
+        output_path = Path(output_path)
 
     wb = Workbook()
 
@@ -219,7 +199,7 @@ def create_portfolio_template(output_path: str = None) -> str:
     return str(output_path)
 
 
-def read_portfolio(file_path: str = None) -> Dict[str, Any]:
+def read_portfolio(file_path: str) -> Dict[str, Any]:
     """
     读取 Excel 持仓文件
 
@@ -234,7 +214,6 @@ def read_portfolio(file_path: str = None) -> Dict[str, Any]:
     except ImportError:
         raise ImportError("请安装 openpyxl: pip install openpyxl")
 
-    file_path = get_portfolio_path(file_path)
     wb = load_workbook(file_path, data_only=True)
 
     # 读取持仓表
@@ -289,7 +268,7 @@ def read_portfolio(file_path: str = None) -> Dict[str, Any]:
     return {
         'holdings': holdings,
         'transactions': transactions,
-        'file_path': str(file_path),
+        'file_path': file_path,
         'read_time': datetime.now().isoformat()
     }
 
@@ -310,7 +289,6 @@ def update_portfolio_prices(file_path: str, prices: Dict[str, float]) -> Dict[st
     except ImportError:
         raise ImportError("请安装 openpyxl: pip install openpyxl")
 
-    file_path = get_portfolio_path(file_path)
     wb = load_workbook(file_path)
     ws_holdings = wb["持仓"]
 
@@ -379,6 +357,110 @@ def update_portfolio_prices(file_path: str, prices: Dict[str, float]) -> Dict[st
     }
 
 
+def update_trading_recommendations(file_path: str, recommendations: List[Dict[str, Any]]) -> None:
+    """
+    更新交易建议表到 Excel
+
+    参数:
+        file_path: Excel 文件路径
+        recommendations: 交易建议列表，每个元素包含:
+            - ticker: 股票代码
+            - name: 股票名称
+            - current_price: 当前价格
+            - action: 操作建议 (可加仓/观望/减仓/卖出)
+            - buy_price: 建议买入价
+            - stop_loss: 止损价
+            - take_profit: 止盈价
+            - reasons: 分析理由
+    """
+    try:
+        from openpyxl import load_workbook
+        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+        from openpyxl.utils import get_column_letter
+    except ImportError:
+        raise ImportError("请安装 openpyxl: pip install openpyxl")
+
+    wb = load_workbook(file_path)
+
+    # 删除已有的交易建议表
+    if '交易建议' in wb.sheetnames:
+        del wb['交易建议']
+
+    # 创建新的交易建议表
+    ws = wb.create_sheet('交易建议')
+
+    # 样式定义
+    header_font = Font(bold=True, color='FFFFFF')
+    header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+    buy_fill = PatternFill(start_color='C6EFCE', end_color='C6EFCE', fill_type='solid')
+    sell_fill = PatternFill(start_color='FFC7CE', end_color='FFC7CE', fill_type='solid')
+    hold_fill = PatternFill(start_color='FFEB9C', end_color='FFEB9C', fill_type='solid')
+    thin_border = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin')
+    )
+
+    # 表头
+    headers = ['股票代码', '股票名称', '当前价格', '操作建议', '建议买入价', '止损价', '止盈价', '分析理由']
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+
+    # 写入数据
+    for row_idx, rec in enumerate(recommendations, 2):
+        data = [
+            rec.get('ticker', ''),
+            rec.get('name', ''),
+            rec.get('current_price', 0),
+            rec.get('action', '观望'),
+            rec.get('buy_price', ''),
+            rec.get('stop_loss', ''),
+            rec.get('take_profit', ''),
+            rec.get('reasons', '')
+        ]
+
+        for col_idx, value in enumerate(data, 1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=value)
+            cell.border = thin_border
+
+            # 价格列右对齐和数字格式
+            if col_idx in [3, 5, 6, 7] and value:
+                cell.alignment = Alignment(horizontal='right')
+                if isinstance(value, (int, float)):
+                    is_hk = '.HK' in str(rec.get('ticker', ''))
+                    cell.number_format = '"HK$"#,##0.00' if is_hk else '"$"#,##0.00'
+
+            # 操作建议颜色
+            if col_idx == 4:
+                cell.alignment = Alignment(horizontal='center')
+                if value in ['可加仓', '买入', '强烈买入']:
+                    cell.fill = buy_fill
+                elif value == '观望':
+                    cell.fill = hold_fill
+                elif value in ['减仓', '卖出', '强烈卖出']:
+                    cell.fill = sell_fill
+
+    # 调整列宽
+    widths = [12, 18, 12, 10, 12, 12, 12, 45]
+    for idx, width in enumerate(widths, 1):
+        ws.column_dimensions[get_column_letter(idx)].width = width
+
+    # 添加说明
+    next_row = len(recommendations) + 3
+    ws.cell(row=next_row, column=1, value='说明:').font = Font(bold=True)
+    ws.cell(row=next_row + 1, column=1, value='• 建议买入价：技术分析建议的入场价位')
+    ws.cell(row=next_row + 2, column=1, value='• 止损价：跌破此价建议离场，控制亏损')
+    ws.cell(row=next_row + 3, column=1, value='• 止盈价：涨到此价可考虑部分获利了结')
+    ws.cell(row=next_row + 4, column=1, value='• 以上价位仅供参考，请结合自身情况决策')
+    ws.cell(row=next_row + 5, column=1, value=f'• 更新时间: {datetime.now().strftime("%Y-%m-%d %H:%M")}')
+
+    wb.save(file_path)
+    wb.close()
+
+
 def format_portfolio_summary(portfolio_data: Dict[str, Any]) -> str:
     """
     格式化持仓汇总为易读文本
@@ -386,31 +468,31 @@ def format_portfolio_summary(portfolio_data: Dict[str, Any]) -> str:
     holdings = portfolio_data.get('holdings', [])
 
     if not holdings:
-        return "持仓为空，请先添加股票"
+        return "📭 持仓为空，请先添加股票"
 
     lines = [
-        "**持仓汇总**",
+        "📊 **持仓汇总**",
         "",
         "| 股票 | 数量 | 成本价 | 现价 | 盈亏 |",
         "|------|------|--------|------|------|"
     ]
 
     for h in holdings:
-        profit_emoji = "+" if h.get('profit_loss', 0) >= 0 else ""
+        profit_emoji = "🟢" if h.get('profit_loss', 0) >= 0 else "🔴"
         lines.append(
             f"| {h['ticker']} | {h['shares']:.0f} | ${h['avg_cost']:.2f} | "
-            f"${h.get('current_price', 0):.2f} | {profit_emoji}{h.get('profit_loss_pct', 0):.1f}% |"
+            f"${h.get('current_price', 0):.2f} | {profit_emoji} {h.get('profit_loss_pct', 0):.1f}% |"
         )
 
     total = portfolio_data.get('total_profit_loss', 0)
     total_pct = portfolio_data.get('total_return_pct', 0)
-    total_sign = "+" if total >= 0 else ""
+    total_emoji = "🟢" if total >= 0 else "🔴"
 
     lines.extend([
         "",
         f"**总投入**: ${portfolio_data.get('total_cost', 0):,.2f}",
         f"**当前市值**: ${portfolio_data.get('total_value', 0):,.2f}",
-        f"**总盈亏**: {total_sign}${total:,.2f} ({total_sign}{total_pct:.2f}%)"
+        f"**总盈亏**: {total_emoji} ${total:,.2f} ({total_pct:.2f}%)"
     ])
 
     return "\n".join(lines)
