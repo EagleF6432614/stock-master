@@ -33,9 +33,15 @@ v4.2:
 import json
 import os
 import subprocess
+import sys
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 import numpy as np
+
+# 确保 scripts 目录在 path 中，以便导入 market_dashboard
+_SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIR)
 
 
 LIGHTWEIGHT_CHARTS_CDN = (
@@ -89,6 +95,21 @@ class HTMLReportGenerator:
 
         返回: HTML 文件绝对路径
         """
+        # v4.3: 获取大盘数据（用于 Tab 页面切换）
+        dashboard_html = ""
+        dashboard_css = ""
+        try:
+            from market_dashboard import build_dashboard_content
+            dash = build_dashboard_content()
+            dashboard_html = dash["html"]
+            dashboard_css = dash["css"]
+        except Exception:
+            dashboard_html = """
+            <div style="text-align:center;padding:60px 20px;color:#888;">
+                <div style="font-size:2em;margin-bottom:16px;">📡</div>
+                <div>暂时无法获取大盘数据</div>
+            </div>"""
+
         indicators = analysis_result.get('indicators', {})
         sr = analysis_result.get('support_resistance', {})
         patterns = analysis_result.get('patterns', {})
@@ -193,11 +214,54 @@ class HTMLReportGenerator:
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{ticker.upper()} 技术分析 - Stock Master v4.2</title>
+    <title>{ticker.upper()} 技术分析 - Stock Master v4.3</title>
     <script src="{LIGHTWEIGHT_CHARTS_CDN}"></script>
-    <style>{self._get_css()}</style>
+    <style>{self._get_css()}
+    /* v4.3: Tab 页面切换 */
+    .tab-nav {{
+        display: flex;
+        justify-content: center;
+        gap: 4px;
+        padding: 12px 0;
+        margin-bottom: 8px;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background: #0d0d1a;
+    }}
+    .tab-btn {{
+        padding: 8px 28px;
+        border: 1px solid #2a2a3e;
+        background: transparent;
+        color: #888;
+        font-size: 0.92em;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        border-radius: 8px;
+    }}
+    .tab-btn:hover {{ color: #ccc; border-color: #444; }}
+    .tab-btn.active {{
+        background: #1e88e5;
+        border-color: #1e88e5;
+        color: #fff;
+        font-weight: 600;
+    }}
+    .tab-panel {{ display: none; }}
+    .tab-panel.active {{ display: block; }}
+    /* 大盘数据面板样式 */
+    {dashboard_css}
+    </style>
 </head>
 <body>
+    <!-- v4.3: Tab 导航 -->
+    <div class="tab-nav">
+        <button class="tab-btn active" data-tab="analysis">股票分析</button>
+        <button class="tab-btn" data-tab="dashboard">大盘数据</button>
+    </div>
+
+    <!-- Tab: 股票分析 -->
+    <div class="tab-panel active" id="tab-analysis">
     <div class="container">
         <!-- Header -->
         <div class="header">
@@ -309,7 +373,7 @@ class HTMLReportGenerator:
         {disclaimer_html}
 
         <div class="footer">
-            Stock Master v4.2 · Powered by Lightweight Charts
+            Stock Master v4.3 · Powered by Lightweight Charts
         </div>
     </div>
 
@@ -692,6 +756,31 @@ class HTMLReportGenerator:
     // Default: hide all except MA and K-line
     ['bb', 'sr', 'swing', 'trend', 'fib'].forEach(function(g) {{ toggleGroup(g, false); }});
 
+    </script>
+    </div><!-- /tab-analysis -->
+
+    <!-- Tab: 大盘数据 -->
+    <div class="tab-panel" id="tab-dashboard">
+        {dashboard_html}
+    </div>
+
+    <!-- v4.3: Tab 切换逻辑 -->
+    <script>
+    document.querySelectorAll('.tab-btn').forEach(function(btn) {{
+        btn.addEventListener('click', function() {{
+            var tab = btn.dataset.tab;
+            // 切换按钮激活状态
+            document.querySelectorAll('.tab-btn').forEach(function(b) {{ b.classList.remove('active'); }});
+            btn.classList.add('active');
+            // 切换面板显示
+            document.querySelectorAll('.tab-panel').forEach(function(p) {{ p.classList.remove('active'); }});
+            document.getElementById('tab-' + tab).classList.add('active');
+            // 切回股票分析时触发 resize 让图表重绘
+            if (tab === 'analysis') {{
+                window.dispatchEvent(new Event('resize'));
+            }}
+        }});
+    }});
     </script>
 </body>
 </html>"""

@@ -2,10 +2,11 @@
 name: stock-master
 description: 综合性股票技术分析工具，小白友好。采用混合数据源（Yahoo Finance + Alpha Vantage MCP），提供交互式HTML可视化报告（Lightweight Charts K线图+技术叠加+Swing标注+趋势线+S/R色带）和通俗易懂的分析文字、买卖点建议、Excel持仓管理。支持港股本地计算、ATR动态止损、KDJ随机指标、MACD/RSI背离检测、OBV量能分析、斐波那契支撑阻力位、K线形态识别（锤子线/吞没/十字星）、趋势形态识别（双底/头肩/三角形）。支持TradingView跳转、飞书多维表格同步。当用户请求股票分析、技术指标、交易建议、持仓分析时激活。
 ---
-# Stock Master v4.2 - 小白友好版
+# Stock Master v4.3 - 小白友好版
 
 面向普通投资者的技术分析工具，用日常语言解释指标，给出明确买卖建议。
 
+> v4.3 更新：大盘数据看板 — 从 Day1 Global 拉取美股+加密市场数据，生成卡片式 HTML 仪表板（市场全景、情绪面板、BTC链上信号、AI分析、Top10新闻）。
 > v4.2 更新：图表交互 + 文字分析增强 — 指标 Toggle 开关（默认只显示K线+均线）、评分明细表、小白技术解读卡片、关键价位表、操作建议区、报告结构重排（结论在前图表在后）。
 > v4.1: 图表可视化升级 — 图例、Swing 标注、趋势线、S/R色带、布林带填充、PriceLine、趋势徽章。
 > v4.0: 交互式 HTML 可视化报告（Lightweight Charts K线图 + MACD/RSI/成交量子图）、TradingView 跳转、评分仪表盘。
@@ -205,6 +206,37 @@ from beginner_analyzer import generate_html_report, TradingSignal
 path = generate_html_report(ticker, name, analysis_result, signal, stock_data)
 # path 为 HTML 文件路径，已自动在浏览器中打开
 ```
+
+### 6. 大盘数据看板 [v4.3]
+```
+用户: "大盘数据" / "看看大盘" / "市场看板" / "今日市场"
+```
+
+**执行步骤**:
+1. 调用 `scripts/market_dashboard.py` 的 `generate_market_dashboard()` 函数
+2. 自动从 Day1 Global API 拉取最新市场数据和 AI 分析
+3. 生成 HTML 仪表板并在浏览器中打开
+4. 在 Claude Code 中输出简要市场摘要
+
+**包含内容**:
+- 市场全景（VOO/QQQM/VIX/Gold/BTC/ETH）
+- 个股 & 加密行情表（NVDA/TSLA/GOOG/RKLB/CRCL/HOOD/COIN + XAUT/VIRTUAL/HYPE）
+- 情绪面板（加密恐慌贪婪指数 + CNN 恐慌贪婪指数）
+- BTC 链上信号（周线RSI/成交量/SOPR/长期供应/200周均线）
+- AI 核心判断（宏观 + 加密 + 操作建议）
+- Top 10 新闻（带分类标签、摘要、操作建议、原文链接）
+
+**报告保存路径**: `~/Desktop/AI编程/stock master/reports/market_dashboard_YYYYMMDD.html`
+
+**调用方式**:
+```python
+from market_dashboard import generate_market_dashboard
+path = generate_market_dashboard()
+# path 为 HTML 文件路径，已自动在浏览器中打开
+```
+
+**数据来源**: Day1 Global (brief.day1global.xyz) — Finnhub, Yahoo Finance, OKX, CoinGlass, Claude AI
+**注意**: 数据源为第三方非公开 API，如不可用会提示错误，不影响其他功能。
 
 ## 风险提示（必须包含）
 

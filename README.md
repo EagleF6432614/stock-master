@@ -1,4 +1,4 @@
-# Stock Master v1.5 - 小白友好的股票技术分析工具
+# Stock Master v1.6 - 小白友好的股票技术分析工具
 
 [![GitHub stars](https://img.shields.io/github/stars/EagleF6432614/stock-master?style=social)](https://github.com/EagleF6432614/stock-master)
 [![GitHub forks](https://img.shields.io/github/forks/EagleF6432614/stock-master?style=social)](https://github.com/EagleF6432614/stock-master/fork)
@@ -6,9 +6,21 @@
 
 面向普通投资者的技术分析工具，用日常语言解释复杂指标，给出明确买卖建议。
 
-## v1.5 更新亮点
+## v1.6 更新亮点
 
-### 交互式 TradingView 图表报告 (NEW)
+### 大盘数据看板 (NEW)
+- 股票分析报告内嵌 **双 Tab 页面** — "股票分析" + "大盘数据" 一键切换
+- 分析任意股票时即可查看大盘全景，无需单独打开
+- 大盘概览：美股指数（VOO/QQQM/VIX）、黄金、加密货币（BTC/ETH）
+- 个股详情：NVDA、TSLA、GOOG 等热门标的实时行情
+- 市场情绪：加密恐慌贪婪指数、CNN F&G、黄金强弱信号
+- BTC 链上信号：周线RSI、SOPR、长期供应占比、200周均线倍数
+- AI 市场分析：宏观分析、加密分析、操作建议、市场催化剂、热点新闻
+- 支持独立生成大盘数据报告
+
+### v1.5 功能
+
+### 交互式 TradingView 图表报告
 - 基于 **TradingView Lightweight Charts v4** 的交互式 HTML 报告
 - K线图 + MA均线/布林带/支撑阻力/Swing标注/趋势线/斐波那契（可切换）
 - 成交量/MACD/RSI 子图，四图联动缩放
@@ -53,6 +65,7 @@
 - **飞书同步**: 支持同步到飞书多维表格
 - **形态识别**: K线形态 + 趋势形态自动识别
 - **智能容错**: API 失败自动降级，异常信号检测
+- **大盘看板**: 内嵌大盘数据 Tab，分析个股同时纵览全局市场
 
 ## 安装方式
 
@@ -194,7 +207,8 @@ stock-master/
 │   ├── main.py                 # 主分析器
 │   ├── indicators.py           # 技术指标计算（含 Swing/趋势线/S-R色带）
 │   ├── beginner_analyzer.py    # 小白友好报告生成（含评分明细）
-│   ├── html_report.py          # [v1.5 NEW] 交互式 HTML 可视化报告
+│   ├── html_report.py          # 交互式 HTML 可视化报告（含双 Tab 页面）
+│   ├── market_dashboard.py     # [v1.6 NEW] 大盘数据看板
 │   ├── portfolio.py            # 持仓管理
 │   ├── feishu_sync.py          # 飞书同步
 │   └── feishu_init_tables.py   # 飞书表结构初始化
@@ -237,6 +251,7 @@ MIT License - 详见 [LICENSE](LICENSE)
 - [yfinance](https://github.com/ranaroussi/yfinance) - Yahoo Finance 数据
 - [Alpha Vantage](https://www.alphavantage.co/) - 专业技术指标
 - [Claude Code](https://claude.ai) - AI 编程助手
+- [Day1 Global](https://brief.day1global.xyz/) - 大盘数据与市场分析
 
 ---
 
