@@ -97,10 +97,10 @@ def calculate_rsi(prices: np.ndarray, period: int = 14) -> float:
     # 使用 EMA 方式计算平均涨跌（更平滑）
     alpha = 1.0 / period
 
-    avg_gain = gains[0]
-    avg_loss = losses[0]
+    avg_gain = np.mean(gains[:period])
+    avg_loss = np.mean(losses[:period])
 
-    for i in range(1, len(gains)):
+    for i in range(period, len(gains)):
         avg_gain = alpha * gains[i] + (1 - alpha) * avg_gain
         avg_loss = alpha * losses[i] + (1 - alpha) * avg_loss
 
