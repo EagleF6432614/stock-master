@@ -722,6 +722,7 @@ def generate_trading_recommendation(
                     breakdown.append({'indicator': f'{cn_name}形态', 'value': '', 'signal': '看跌', 'score': -1})
 
     # === 生成建议 (v3.4 调整阈值) ===
+    buy_score = max(-10, min(10, buy_score))
     if buy_score >= 6:
         action = "BUY"
         confidence = "高"

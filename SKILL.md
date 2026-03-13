@@ -1,273 +1,287 @@
 ---
 name: stock-master
-description: 综合性股票技术分析工具，小白友好。采用混合数据源（Yahoo Finance + Alpha Vantage MCP），提供交互式HTML可视化报告（Lightweight Charts K线图+技术叠加+Swing标注+趋势线+S/R色带）和通俗易懂的分析文字、买卖点建议、Excel持仓管理。支持港股本地计算、ATR动态止损、KDJ随机指标、MACD/RSI背离检测、OBV量能分析、斐波那契支撑阻力位、K线形态识别（锤子线/吞没/十字星）、趋势形态识别（双底/头肩/三角形）。支持TradingView跳转、飞书多维表格同步。当用户请求股票分析、技术指标、交易建议、持仓分析时激活。
+description: 综合性股票技术分析工具，小白友好。混合数据源（Yahoo Finance + Alpha Vantage MCP），输出通俗易懂的技术分析、买卖建议和交互式可视化报告。支持美股/港股/A股、持仓盈亏分析、PDF导出、大盘看板。当用户提到任何股票代码（TSLA、0700.HK、688028）、公司名（苹果、茅台、沃尔德）、或请求股票分析、技术指标、交易建议、持仓分析、大盘数据、小白建议、导出报告时激活。即使用户只说"分析一下"或"能买吗"，只要上下文涉及股票，都应激活此 skill。
 ---
-# Stock Master v4.3 - 小白友好版
+# Stock Master v4.6
 
-面向普通投资者的技术分析工具，用日常语言解释指标，给出明确买卖建议。
+面向普通投资者的技术分析工具。核心原则：**用日常语言解释技术指标，给出明确可执行的买卖建议。**
 
-> v4.3 更新：大盘数据看板 — 从 Day1 Global 拉取美股+加密市场数据，生成卡片式 HTML 仪表板（市场全景、情绪面板、BTC链上信号、AI分析、Top10新闻）。
-> v4.2 更新：图表交互 + 文字分析增强 — 指标 Toggle 开关（默认只显示K线+均线）、评分明细表、小白技术解读卡片、关键价位表、操作建议区、报告结构重排（结论在前图表在后）。
-> v4.1: 图表可视化升级 — 图例、Swing 标注、趋势线、S/R色带、布林带填充、PriceLine、趋势徽章。
-> v4.0: 交互式 HTML 可视化报告（Lightweight Charts K线图 + MACD/RSI/成交量子图）、TradingView 跳转、评分仪表盘。
+## 目标与约束
 
-## 快速参考
+### 用户画像
+普通散户投资者，可能不懂技术术语。所有输出必须让完全没有股票知识的人也能理解并据此行动。
 
-### 数据源策略
+### 输出质量约束
+1. **结论先行** — 先给结论（买/卖/观望），再给理由和数据支撑
+2. **可执行** — 每个建议必须带具体价格和数量，不说"可以考虑"这种模糊话
+3. **风险对称** — 有买入建议就必须同时给止损价，有止盈就必须说清触发条件
+4. **小白友好** — 每个技术指标必须用生活化比喻解释（汽车油门/橡皮筋/红绿灯等），参考 `scripts/beginner_analyzer.py` 中 `explain_*_simple()` 系列函数的风格
+5. **数据透明** — 展示评分明细，让用户知道每个指标对最终评分的贡献
+6. **风险提示** — 每份分析必须包含：仅供参考不构成投资建议、股市有风险投资需谨慎、建议分批建仓设置止损
+
+### 禁止行为
+- 不输出没有数据支撑的判断
+- 不在报告中使用"可能""也许""或者"等模糊词作为操作建议（分析解释中可用）
+- 评分超出 [-10, +10] 范围时必须截断
+- 不在分析中混入个人观点，所有判断基于指标数据
+
+### 错误处理
+- ticker 无效或 `analyze_stock_local()` 返回 `{'error': ...}` → 告知用户并建议检查代码（A股需 `.SS`/`.SZ` 后缀，港股需 `.HK`）
+- 数据不足（< 20 个交易日）→ 部分指标可能返回默认值（RSI=50, KDJ 返回 `{'error': '数据不足'}`），分析中注明"数据周期较短，结论仅供参考"
+- 某个指标返回 `{'error': ...}` → 跳过该指标，评分中标注"XX指标因数据不足未参与评分"
+
+## 数据获取
+
+### 数据源优先级
 | 数据 | 美股 | 港股/A股 |
 |------|------|----------|
-| 价格 | Yahoo Finance | Yahoo Finance |
-| RSI/布林带 | Alpha Vantage MCP | 本地计算 |
+| 价格+OHLCV | Yahoo Finance | Yahoo Finance |
+| RSI/布林带 | Alpha Vantage MCP → 失败降级本地 | 本地计算 |
 | MACD/KDJ/ATR/均线/OBV/形态 | 本地计算 | 本地计算 |
 
-### 指标小白解读
+### 代码识别
+- 中文股票名 → 搜索对应代码
+- A股：加 `.SS`（上交所）或 `.SZ`（深交所）后缀
+- 港股：加 `.HK` 后缀
+- 美股：直接使用 ticker
 
-**RSI** (相对强弱):
-- <30 超卖 → "大甩卖，可能捡便宜"
-- >70 超买 → "被抢购一空，小心回调"
+### 容错策略
+- Alpha Vantage MCP：失败 → 等 2s 重试 1 次 → 仍失败 → 降级到本地计算，报告中注明数据来源
+- Yahoo Finance：超时重试 2 次（2s → 4s 指数退避）
+- 429/限流：标记当天已限流，后续直接本地计算
 
-**MACD**:
-- 金叉 → "踩油门加速，买入信号"
-- 死叉 → "松油门减速，卖出警告"
+## 核心脚本与数据结构
 
-**KDJ** (随机指标):
-- 金叉/J<0 → "绿灯亮了，短期买入"
-- 死叉/J>100 → "红灯亮了，短期卖出"
+### 一键分析
 
-**布林带**:
-- 跌破下轨 → "橡皮筋拉太长，可能反弹"
-- 突破上轨 → "涨过头了，可能回落"
+`scripts/indicators.py` → `analyze_stock_local(ticker, period='3mo')`
 
-**背离信号**:
-- 底背离 → "价格创新低但动能减弱，反弹信号"
-- 顶背离 → "价格创新高但动能减弱，回调信号"
-
-**K线形态** [v3.4]:
-- 锤子线/早晨之星/看涨吞没 → 底部反转信号
-- 上吊线/黄昏之星/看跌吞没 → 顶部反转信号
-- 三只白兵/三只乌鸦 → 强趋势确认
-
-**趋势形态** [v3.4]:
-- 双底(W底)/头肩底 → 底部反转，看涨
-- 双顶(M头)/头肩顶 → 顶部反转，看跌
-- 上升三角形 → 通常向上突破
-- 下降三角形 → 通常向下突破
-
-### 异常量价信号 [v3.7 - EvoMap Capsule: Median Anomaly Detection]
-
-基于近 20 个交易日的中位数，用 3 倍阈值检测异常：
-
-| 检测项 | 公式 | 小白解读 |
-|--------|------|----------|
-| 放量异常 | 当日成交量 > 20日成交量中位数 × 3 | "今天成交量是平时的N倍，有大资金进场" |
-| 缩量异常 | 当日成交量 < 20日成交量中位数 × 0.3 | "今天几乎没人交易，市场观望" |
-| 波动异常 | 当日涨跌幅 > 20日振幅中位数 × 3 | "今天波动剧烈，是平时的N倍，注意风险" |
-
-**规则**:
-- 数据不足 20 日时跳过检测
-- 中位数为 0 时跳过该项
-- 异常信号在报告中单独标注，不参与评分，仅作提醒
-
-### 交易建议评分 (v3.4)
-| 分数 | 建议 | 仓位 |
-|------|------|------|
-| ≥6 | 强烈买入 | 30% |
-| 3-5 | 建议买入 | 20% |
-| -2~2 | 观望 | - |
-| -3~-5 | 建议卖出 | - |
-| ≤-6 | 强烈卖出 | - |
-
-### 形态信号权重 [v3.4]
-| 形态类型 | 权重 |
-|----------|------|
-| 三只白兵/乌鸦、早晨/黄昏之星、头肩、双底双顶 | ±3 |
-| 看涨/看跌吞没、上升/下降三角形 | ±2 |
-| 锤子线、十字星等单K线形态 | ±1 |
-
-## 使用流程
-
-### 1. 分析单只股票
-```
-用户: "分析 TSLA" / "看看苹果" / "0700.HK 能买吗"
-```
-
-**执行步骤**:
-1. 获取 Yahoo Finance 实时价格和历史数据（超时 10s，失败重试 2 次，指数退避 2s/4s）
-2. 美股: 调用 Alpha Vantage MCP 获取 RSI/布林带（容错策略见下方）
-3. 港股/A股或API失败: 使用 `scripts/indicators.py` 本地计算
-4. 计算全部指标 (RSI/MACD/KDJ/OBV/背离/支撑阻力/形态)
-5. 异常量价检测（见下方异常信号模块）
-6. **[v4.2]** 在 Claude Code 中**完整输出文字分析报告**（`format_detailed_report()` 或 `format_simple_report()`），保证用户在对话中直接看到所有分析内容
-7. **[v4.2]** 同时调用 `generate_html_report()` 生成交互式 HTML 报告（自动打开浏览器），将报告链接附在文字回复的末尾
-   - 格式示例：`📊 交互式报告已生成：[点击查看](file:///path/to/report.html)`
-   - HTML 报告是**补充**，不替代文字输出
-   - 失败时不影响文字输出，仅跳过 HTML 生成
-
-**API 容错策略** [v3.7 - EvoMap Capsule: HTTP Retry + Circuit Breaker]:
-
-Alpha Vantage MCP 调用链：
-```
-调用 → 失败? → 等 2s 重试 1 次 → 仍失败? → 自动降级到本地计算
-```
-- 识别 429/限流响应：标记当天 Alpha Vantage 已限流，后续分析直接走本地计算，不浪费剩余请求额度
-- Yahoo Finance 超时：重试 2 次（间隔 2s → 4s 指数退避），仍失败则报错并说明原因
-- 降级时在报告中注明："数据来源：本地计算（API 暂时不可用）"
-
-### 2. 持仓管理
-```
-用户: "创建持仓表格" / "分析我的持仓" / "更新持仓价格"
-```
-
-**默认 Excel 路径**: `/Users/liyanda/Desktop/AI编程/stock master/my_portfolio.xlsx`
-
-### 3. 对比多只股票
-```
-用户: "对比 AAPL 和 GOOGL" / "这几只哪个好: TSLA, NVDA"
-```
-
-**并行分析策略** [v3.7 - EvoMap Capsule: Swarm Task Decomposition]:
-- 2 只股票：串行分析即可
-- 3 只及以上：使用 Task 工具并行派发子 Agent，每个 Agent 独立分析一只股票，最后汇总对比
-- 汇总时统一格式：评分、关键指标、异常信号，生成对比表格
-
-### 4. 飞书同步 [v3.5]
-```
-用户: "同步分析结果到飞书" / "更新飞书持仓"
-```
-
-**飞书多维表格结构**:
-| 表名 | 用途 | Table ID |
-|------|------|----------|
-| 数据表 (技术信号) | 股票分析结果 | tbldtKCoANcpvitS |
-| 持仓管理 | 持仓记录 | tblHkx30pGT1QzOq |
-| 交易记录 | 买卖历史 | tblTnlPDFmr5gmSV |
-
-**配置文件**: `/Users/liyanda/Desktop/AI编程/stock master/feishu_config.json`
-
-**同步逻辑**: 本地分析 → 飞书（单向，飞书为主库）
-
-**飞书同步容错** [v3.7 - EvoMap Capsule: Format Fallback Chain]:
-```
-富文本/结构化数据写入 → 失败? → 降级为纯文本表格写入 → 仍失败? → 保存到本地 JSON 备份并报错
-```
-- 飞书 API 返回 400/格式错误时，自动将 markdown 表格转为纯文本再试
-- 连续 3 次失败触发熔断，跳过飞书同步，数据备份到 `feishu_sync_backup.json`
-- 在报告中注明同步状态："飞书同步成功" / "飞书暂不可用，数据已本地备份"
-
-### 5. HTML 可视化报告 [v4.0 ~ v4.2]
-
-分析完成后自动生成交互式 HTML 报告并在浏览器中打开。
-
-**报告结构** [v4.2 — 结论在前、图表在后]:
-1. 评分仪表盘（-10 到 +10 可视化弧形表盘）+ 一句话结论
-2. 买卖建议价格卡片（买入/止损/止盈/风险收益比/仓位）
-3. **评分明细表** [v4.2] — 每个指标的信号和得分贡献（从 `signal.score_breakdown` 读取）
-4. **小白技术解读** [v4.2] — 卡片网格，每个指标用通俗比喻解释（"踩油门加速"、"弹簧压太紧"）
-5. **关键价位表** [v4.2] — 止损/支撑/阻力/目标价格 + 说明
-6. **操作建议区** [v4.2] — 根据信号强度给出具体策略步骤
-7. **指标 Toggle 工具栏** [v4.2] — 药丸按钮切换图表叠加层（默认只开启均线）
-8. K线图 + 均线/布林带/支撑阻力/Swing/趋势线/斐波那契（可切换）
-9. 成交量/MACD/RSI 子图 — 联动缩放
-10. 风险提示
-11. "在 TradingView 中打开" 跳转按钮
-
-**图表 Toggle 开关** [v4.2]:
-| 按钮 | 控制内容 | 默认状态 |
-|------|----------|----------|
-| 均线 | MA5/10/20/60 | 开启 |
-| 布林带 | 上轨/下轨/中轨填充 | 关闭 |
-| 支撑阻力 | S/R 色带 + PriceLine | 关闭 |
-| Swing标注 | 高低点 Marker | 关闭 |
-| 趋势线 | 上升/下降趋势线 | 关闭 |
-| 斐波那契 | Fib 回撤/扩展 PriceLine | 关闭 |
-
-**报告保存路径**: `~/Desktop/AI编程/stock master/reports/TICKER_YYYYMMDD_HHMM.html`
-
-**技术实现**: `scripts/html_report.py` — HTMLReportGenerator 类
-- 使用 TradingView Lightweight Charts v4 (CDN, Apache 2.0 开源)
-- 自包含 HTML（内嵌 CSS/JS，CDN 加载图表库）
-- 暗色主题，与 TradingView 风格一致
-- Canvas overlay 绘制 S/R 色带（跟随缩放重绘）
-- 失败时自动回退到 Markdown 输出
-
-**可视化数据源** [v4.1]: `scripts/indicators.py` 新增函数
-- `find_swing_points()` — 识别 Swing 高低点坐标
-- `calculate_trend_lines()` — 计算上升/下降趋势线 + 通道类型
-- `calculate_sr_zones()` — 支撑阻力扩展为 ATR 色带区域
-
-**TradingView 跳转**: 报告中的按钮直链到 `tradingview.com/chart/?symbol=EXCHANGE:TICKER`
-- `.HK` → `HKEX:`, `.SS` → `SSE:`, `.SZ` → `SZSE:`, 其他 → 直接使用 ticker
-
-**调用方式**:
+返回值结构（所有分析的数据基础）：
 ```python
-from beginner_analyzer import generate_html_report, TradingSignal
-# signal = generate_trading_recommendation(...)  # 先生成信号
-# stock_data = get_stock_data(ticker, '3mo')      # 原始 OHLCV
-path = generate_html_report(ticker, name, analysis_result, signal, stock_data)
-# path 为 HTML 文件路径，已自动在浏览器中打开
+{
+    'ticker': str,              # 'TSLA', '688028.SS'
+    'current_price': float,
+    'timestamp': str,           # ISO format
+    'source': str,
+    'indicators': {
+        'rsi': float,           # 0-100，数据不足时返回 50.0
+        'bbands': {'upper': float, 'middle': float, 'lower': float, 'bandwidth': float},
+        'macd': {
+            'macd_line': float, 'signal_line': float,
+            'histogram': float, 'prev_histogram': float,
+            'signal': str,      # 'golden_cross'|'death_cross'|'bullish'|'bearish'
+            'interpretation': str
+        },
+        'atr': float,           # 绝对值
+        'atr_percent': float,   # 百分比
+        'ma_system': {
+            'ma5': float, 'ma10': float, 'ma20': float,
+            'ma60': float|None,  # 数据 < 60天时为 None
+            'arrangement': str,  # '多头排列'|'空头排列'|'均线缠绕'
+            'trend': str         # 'bullish'|'bearish'|'neutral'
+        },
+        'volume': {
+            'volume_ratio': float, 'pattern': str,
+            'signal': str, 'explanation': str
+        },
+        'kdj': {'k': float, 'd': float, 'j': float, 'signal': str, 'interpretation': str},
+        'obv': {'obv': int, 'signal': str, 'interpretation': str},
+        'williams_r': {'williams_r': float, 'signal': str, 'interpretation': str},
+        'bias': {'bias6': float, 'bias12': float, 'bias24': float, 'signal': str}
+    },
+    'support_resistance': {
+        'supports': [{'price': float, 'type': str, 'strength': str}],   # strength: 'strong'|'medium'|'weak'
+        'resistances': [{'price': float, 'type': str, 'strength': str}],
+        'nearest_support': {'price': float, ...} | None,
+        'nearest_resistance': {'price': float, ...} | None,
+        'fibonacci': {'0.0%': float, '23.6%': float, '38.2%': float, '50.0%': float, '61.8%': float, '78.6%': float, '100.0%': float}
+    },
+    'divergence': {
+        'macd': {'divergence': str, 'strength': float, 'interpretation': str},  # 'bullish'|'bearish'|'none'（注意是字符串 'none'，非 Python None）
+        'rsi': {'divergence': str, 'strength': float, 'interpretation': str}   # 同上
+    },
+    'patterns': {
+        'all_patterns': [{'name': str, 'signal': str, 'strength': str}],
+        'signal': str,          # 'bullish'|'bearish'|'neutral'
+        'bullish_count': int, 'bearish_count': int
+    },
+    'stop_loss': {'stop_loss': float, 'take_profit': float},
+    'prices': {'close_1m': list, 'close_3m': list},
+    'visualization': { ... }    # swing_points, trend_lines, sr_zones
+}
 ```
 
-### 6. 大盘数据看板 [v4.3]
-```
-用户: "大盘数据" / "看看大盘" / "市场看板" / "今日市场"
-```
+### 生成评分
 
-**执行步骤**:
-1. 调用 `scripts/market_dashboard.py` 的 `generate_market_dashboard()` 函数
-2. 自动从 Day1 Global API 拉取最新市场数据和 AI 分析
-3. 生成 HTML 仪表板并在浏览器中打开
-4. 在 Claude Code 中输出简要市场摘要
+`scripts/beginner_analyzer.py` → `generate_trading_recommendation()`
 
-**包含内容**:
-- 市场全景（VOO/QQQM/VIX/Gold/BTC/ETH）
-- 个股 & 加密行情表（NVDA/TSLA/GOOG/RKLB/CRCL/HOOD/COIN + XAUT/VIRTUAL/HYPE）
-- 情绪面板（加密恐慌贪婪指数 + CNN 恐慌贪婪指数）
-- BTC 链上信号（周线RSI/成交量/SOPR/长期供应/200周均线）
-- AI 核心判断（宏观 + 加密 + 操作建议）
-- Top 10 新闻（带分类标签、摘要、操作建议、原文链接）
-
-**报告保存路径**: `~/Desktop/AI编程/stock master/reports/market_dashboard_YYYYMMDD.html`
-
-**调用方式**:
+从 `analyze_stock_local()` 的结果到此函数的参数映射：
 ```python
-from market_dashboard import generate_market_dashboard
-path = generate_market_dashboard()
-# path 为 HTML 文件路径，已自动在浏览器中打开
+result = analyze_stock_local(ticker)
+ind = result['indicators']
+sr = result['support_resistance']
+div = result['divergence']
+
+signal = generate_trading_recommendation(
+    ticker=result['ticker'],
+    current_price=result['current_price'],
+    rsi=ind['rsi'],
+    macd_histogram=ind['macd']['histogram'],
+    prev_macd_histogram=ind['macd']['prev_histogram'],
+    bb_upper=ind['bbands']['upper'],
+    bb_middle=ind['bbands']['middle'],
+    bb_lower=ind['bbands']['lower'],
+    prices_1m=result['prices']['close_1m'],
+    prices_3m=result['prices']['close_3m'],
+    atr=ind['atr'],
+    atr_percent=ind['atr_percent'],
+    volume_ratio=ind['volume']['volume_ratio'],
+    volume_signal=ind['volume']['signal'],
+    ma_trend=ind['ma_system']['trend'],
+    ma_arrangement=ind['ma_system']['arrangement'],
+    kdj_k=ind['kdj']['k'],
+    kdj_d=ind['kdj']['d'],
+    kdj_j=ind['kdj']['j'],
+    kdj_signal=ind['kdj']['signal'],
+    macd_divergence=div['macd']['divergence'],
+    rsi_divergence=div['rsi']['divergence'],
+    obv_signal=ind['obv']['signal'],
+    williams_signal=ind['williams_r']['signal'],
+    bias_signal=ind['bias']['signal'],
+    nearest_support=sr['nearest_support']['price'] if sr['nearest_support'] else None,
+    nearest_resistance=sr['nearest_resistance']['price'] if sr['nearest_resistance'] else None,
+    patterns_signal=result['patterns']['signal'],
+    patterns_data=result['patterns']
+)
 ```
 
-**数据来源**: Day1 Global (brief.day1global.xyz) — Finnhub, Yahoo Finance, OKX, CoinGlass, Claude AI
-**注意**: 数据源为第三方非公开 API，如不可用会提示错误，不影响其他功能。
+返回 `TradingSignal` 对象，关键属性：
+- `action`: str — `'BUY'`|`'SELL'`|`'HOLD'`
+- `score`: int — 综合评分
+- `score_breakdown`: list[dict] — 每项为 `{'indicator': str, 'value': str, 'signal': str, 'score': int}`
+- `stop_loss`, `take_profit`: float
+- `buy_price`, `sell_price`: float|None — 建议买入/卖出价
+- `confidence`: str — `'高'`|`'中'`|`'低'`
+- `reasons`: list[str] — 理由列表
+- `suggested_position`: float — 建议仓位百分比
+- `risk_reward_ratio`: float|None — 风险收益比
+- `atr`, `atr_percent`: float|None
 
-## 风险提示（必须包含）
+### HTML 报告
 
-每份报告必须包含:
-1. 仅供参考，不构成投资建议
-2. 股市有风险，投资需谨慎
-3. 建议分批建仓，设置止损
+`scripts/beginner_analyzer.py` → `generate_html_report(ticker, name, analysis_result, signal, stock_data)`
 
-## 投资智慧模块 [v3.6]
+- `analysis_result`: `analyze_stock_local()` 的返回值
+- `signal`: `generate_trading_recommendation()` 的返回值
+- `stock_data`: 原始 OHLCV 数据字典（从 `get_stock_data()` 获取）
+- 返回：HTML 文件路径（成功）或 Markdown 字符串（失败时回退）
 
-用户个人投资感悟汇总，在分析和沟通时可作为智慧佐证。
+### 大盘看板
 
-**核心内容**: [references/investment-wisdom.md](references/investment-wisdom.md)
-- 股民的十大境界（从新手到财务自由的成长路径）
-- 交易核心原则（止损、仓位管理、交易纪律）
-- 技术分析智慧（K线形态、成交量、主力逻辑）
-- 心态与纪律（心法、牛熊市智慧、复盘）
-- 人生哲学（财富、吃苦、学习、人性）
+`scripts/market_dashboard.py` → `generate_market_dashboard()`
 
-**使用场景**:
-- 给出买卖建议时，引用相关智慧作为佐证
-- 用户迷茫或亏损时，引用"十大境界"帮助定位和鼓励
-- 讨论心态问题时，引用心态与纪律章节
-- 风险提示时，引用风险警示内容
+## 评分体系
 
-**源文件**: `/Users/liyanda/Desktop/AI编程/stock master/股票交易智慧精粹.docx`
-（用户可持续更新此文档，添加新感悟）
+综合评分 [-10, +10]，基于以下指标加权求和后截断：
 
-## 详细文档
+| 指标 | 看多信号 | 看空信号 |
+|------|---------|---------|
+| RSI | <30 超卖 +3 / <40 偏低 +1 | >70 超买 -3 / >60 偏高 -1 |
+| MACD | 金叉 +3 / 多头 +1 | 死叉 -3 / 空头 -1 |
+| 布林带 | 跌破下轨 +2 / 接近下轨 +1 | 突破上轨 -2 / 接近上轨 -1 |
+| KDJ | 金叉 +3 / 超卖 +2 | 死叉 -3 / 超买 -2 |
+| MACD背离 | 底背离 +4 | 顶背离 -4 |
+| RSI背离 | 底背离 +3 | 顶背离 -3 |
+| OBV | 底背离 +2 / 确认上涨 +1 | 顶背离 -2 / 确认下跌 -1 |
+| 均线 | 多头排列 +2 | 空头排列 -2 |
+| 成交量 | 放量上涨 +2 / 缩量下跌 +1 | 放量下跌 -2 |
+| 形态（强） | 三白兵/早晨之星/头肩底/双底 +3 | 三乌鸦/黄昏之星/头肩顶/双顶 -3 |
+| 形态（中） | 看涨吞没/上升三角 +2 | 看跌吞没/下降三角 -2 |
+| 形态（弱） | 锤子线/倒锤子 +1 | 上吊线/射击之星 -1 |
 
-- 投资智慧与哲学: [references/investment-wisdom.md](references/investment-wisdom.md)
-- MCP 工具调用: [references/mcp-tools.md](references/mcp-tools.md)
-- 脚本详细说明: [references/scripts-guide.md](references/scripts-guide.md)
-- 更新日志: [references/changelog.md](references/changelog.md)
+评分 → 建议映射：≥6 强烈买入(30%) / 3~5 建议买入(20%) / -2~2 观望 / -3~-5 建议卖出 / ≤-6 强烈卖出
+
+指标缺失时：跳过该指标不计分，在评分明细中标注"未参与"。
+
+### 异常量价信号（不参与评分，仅提醒）
+- 放量异常：当日成交量 > 20日中位数 × 3
+- 缩量异常：当日成交量 < 20日中位数 × 0.3
+- 波动异常：当日涨跌幅 > 20日振幅中位数 × 3
+
+## 场景处理
+
+### 场景 A：分析单只股票
+触发："分析 TSLA" / "看看苹果" / "0700.HK 能买吗" / "分析沃尔德"
+
+执行：获取数据 → 计算全部指标 → 生成评分 → 输出文字分析 + HTML 报告。AI 自行决定最佳呈现方式，但必须满足上述输出质量约束。
+
+### 场景 B：已持仓分析
+触发：用户提供了买入价和持仓量（如 "买入价 78，持有 20000 股"）
+
+场景 B 建立在场景 A 的分析基础上（需先有或同时执行场景 A）。额外要求：
+- 计算持仓盈亏（成本/市值/浮盈/收益率），货币单位与股票市场一致（A股=人民币，港股=港元，美股=美元）
+- 评估买入位置质量（对比布林带/支撑位/均线）
+- 浮盈 > 20% 时，给出分批止盈方案（具体股数 + 目标价 + 每批锁定利润）
+- 给出移动止损位（基于最近强支撑位）
+- 计算止损后仍可锁定的最低利润
+
+### 场景 C：小白版建议
+触发：用户要求"小白版" / "通俗易懂" / "简单说说"
+
+场景 C 是对已有分析（场景 A/B）的二次呈现。如果上下文中没有先行分析，先执行场景 A 再输出小白版。额外要求：
+- 用一个核心比喻贯穿全文（钓鱼/开车/打牌等），保持一致性
+- 行动步骤用编号列出，每步只说一件事
+- 必须回答三个问题：现在该怎么办？什么时候必须跑？现在要不要急着动？
+- 最后给出"最重要的三句话"作为总结
+
+### 场景 D：PDF 导出
+触发："渲染成 PDF" / "导出 PDF" / "生成报告"
+
+约束：
+- 先生成自包含 HTML（内嵌 CSS，无外部依赖，中文字体声明：PingFang SC / Hiragino Sans GB / Microsoft YaHei）
+- 使用 Chrome 无头模式转 PDF（`--headless --print-to-pdf --print-to-pdf-no-header`）
+- **禁止使用 weasyprint**（中文字体嵌入有 bug 导致乱码）
+- 结论在前、图表/详情在后
+- 使用 callout 卡片区分信息类型（绿=利好 / 红=风险 / 蓝=解读 / 琥珀=警告 / 紫=小白提示）
+- 输出文件复制到桌面并告知路径
+
+### 场景 E：对比多只股票
+触发："对比 AAPL 和 GOOGL" / "哪个好"
+
+3 只及以上时用 Task 工具并行分析，最后汇总对比表。
+
+### 场景 F：大盘数据看板
+触发："大盘数据" / "看看大盘" / "市场看板" / "今日市场"
+
+调用 `generate_market_dashboard()`，数据来源 Day1 Global API（第三方，不可用时提示错误不影响其他功能）。
+
+### 场景 G：持仓管理
+触发："创建持仓表格" / "分析我的持仓"
+
+使用 `scripts/portfolio.py`，Excel 路径默认项目目录下 `my_portfolio.xlsx`。
+
+## HTML 可视化报告
+
+由 `scripts/html_report.py` 的 `HTMLReportGenerator` 生成。
+
+技术栈：TradingView Lightweight Charts v4 (CDN) / 暗色主题 / 自包含 HTML
+
+图表 Toggle 开关（默认只开均线，其余关闭）：均线 / 布林带 / 支撑阻力 / Swing标注 / 趋势线 / 斐波那契
+
+TradingView 跳转映射：`.HK` → `HKEX:` / `.SS` → `SSE:` / `.SZ` → `SZSE:`
+
+报告保存路径：项目目录下 `reports/TICKER_YYYYMMDD_HHMM.html`
+
+失败时自动回退到 Markdown 文字输出。
+
+## 投资智慧模块
+
+[references/investment-wisdom.md](references/investment-wisdom.md) 包含用户个人投资感悟。
+
+使用场景：给出买卖建议时引用相关智慧佐证 / 用户迷茫时引用"十大境界"鼓励 / 风险提示时引用警示内容。
+
+## 参考文档
+- [references/investment-wisdom.md](references/investment-wisdom.md) — 投资智慧
+- [references/mcp-tools.md](references/mcp-tools.md) — MCP 工具调用
+- [references/scripts-guide.md](references/scripts-guide.md) — 脚本说明
+- [references/changelog.md](references/changelog.md) — 更新日志
