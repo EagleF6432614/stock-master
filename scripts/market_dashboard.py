@@ -25,7 +25,7 @@ from typing import Any, Dict, Tuple
 # ---------------------------------------------------------------------------
 
 API_BASE = "https://brief.day1global.xyz/api"
-DEFAULT_OUTPUT_DIR = os.path.expanduser("~/Desktop/AI编程/stock master/reports")
+DEFAULT_OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "reports")
 
 # 大盘概览卡片使用的 ticker（按顺序）
 OVERVIEW_TICKERS = {"VOO", "QQQM", "VIX", "GOLD", "BTC", "ETH"}

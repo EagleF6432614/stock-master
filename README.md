@@ -1,4 +1,4 @@
-# Stock Master v1.6 - 小白友好的股票技术分析工具
+# Stock Master v1.7 - 小白友好的股票 & 预测市场分析工具
 
 [![GitHub stars](https://img.shields.io/github/stars/EagleF6432614/stock-master?style=social)](https://github.com/EagleF6432614/stock-master)
 [![GitHub forks](https://img.shields.io/github/forks/EagleF6432614/stock-master?style=social)](https://github.com/EagleF6432614/stock-master/fork)
@@ -6,9 +6,28 @@
 
 面向普通投资者的技术分析工具，用日常语言解释复杂指标，给出明确买卖建议。
 
-## v1.6 更新亮点
+## v1.7 更新亮点
 
-### 大盘数据看板 (NEW)
+### Polymarket 预测市场分析 (NEW)
+
+接入 Polymarket 公开 API（Gamma + CLOB + Data），无需 auth key 即可使用：
+
+- **看盘 / 标的发现**：按 24h 成交量看热门、按创建时间看新上线、关键词搜索
+- **分类浏览**：政治 / 加密 / 体育 / 地缘 / 科技 / 经济 / 娱乐 七大分类
+- **主看板 HTML**：分类 Tabs + 热门 + 新上线 + 每张卡片 🔍 深度解读按钮
+- **单市场深度报告 HTML**：
+  - 价格历史曲线（530+ 数据点的 Chart.js 渲染）
+  - 多维评分（市场行情 / 资金流向 / 时间窗口 / 宏观主题 4 维 + 综合判断）
+  - 大户 Top 5 持仓榜单（YES / NO 各一列）
+  - 最近 15 笔成交流水
+  - 支持注入 AI 撰写的 Markdown 深度解读到 HTML
+- **飞书关注列表**：定时刷新关注的市场最新价格
+
+详见 [`references/polymarket-guide.md`](references/polymarket-guide.md)。
+
+## v1.6 功能
+
+### 大盘数据看板
 - 股票分析报告内嵌 **双 Tab 页面** — "股票分析" + "大盘数据" 一键切换
 - 分析任意股票时即可查看大盘全景，无需单独打开
 - 大盘概览：美股指数（VOO/QQQM/VIX）、黄金、加密货币（BTC/ETH）
@@ -208,7 +227,11 @@ stock-master/
 │   ├── indicators.py           # 技术指标计算（含 Swing/趋势线/S-R色带）
 │   ├── beginner_analyzer.py    # 小白友好报告生成（含评分明细）
 │   ├── html_report.py          # 交互式 HTML 可视化报告（含双 Tab 页面）
-│   ├── market_dashboard.py     # [v1.6 NEW] 大盘数据看板
+│   ├── market_dashboard.py     # 大盘数据看板
+│   ├── polymarket_analyzer.py  # [v1.7 NEW] Polymarket 数据拉取与分析
+│   ├── polymarket_dashboard.py # [v1.7 NEW] Polymarket 主看板 HTML
+│   ├── polymarket_market_report.py # [v1.7 NEW] 单市场深度报告 HTML
+│   ├── polymarket_watchlist.py # [v1.7 NEW] 飞书关注列表
 │   ├── portfolio.py            # 持仓管理
 │   ├── feishu_sync.py          # 飞书同步
 │   └── feishu_init_tables.py   # 飞书表结构初始化
@@ -256,6 +279,5 @@ MIT License - 详见 [LICENSE](LICENSE)
 ---
 
 如果觉得有用，请给个 Star ⭐ 支持一下！
-Any issue or requirements？ Please contact owner: 
-Tel:+86 183435153378
-Wechat: q10184177226
+
+有问题或建议？欢迎提交 [Issue](https://github.com/EagleF6432614/stock-master/issues)。

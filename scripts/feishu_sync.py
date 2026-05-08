@@ -8,9 +8,6 @@
 - 同步交易记录
 
 数据流向：本地分析结果 → 飞书多维表格（单向同步）
-
-配置说明：
-请创建 feishu_config.json 文件，格式参考 feishu_config.example.json
 """
 
 import json
@@ -19,29 +16,6 @@ from typing import Dict, List, Optional, Any, Union
 from datetime import datetime
 from pathlib import Path
 import time
-import os
-
-
-def get_config_path() -> Path:
-    """获取配置文件路径"""
-    # 优先使用环境变量
-    if os.environ.get('FEISHU_CONFIG_PATH'):
-        return Path(os.environ['FEISHU_CONFIG_PATH'])
-
-    # 其次使用当前目录
-    local_config = Path('./feishu_config.json')
-    if local_config.exists():
-        return local_config
-
-    # 最后使用用户目录
-    home_config = Path.home() / '.stock-master' / 'feishu_config.json'
-    if home_config.exists():
-        return home_config
-
-    raise FileNotFoundError(
-        "找不到飞书配置文件。请创建 feishu_config.json，"
-        "或设置环境变量 FEISHU_CONFIG_PATH"
-    )
 
 
 def to_feishu_timestamp(dt: Union[str, datetime, int, None]) -> Optional[int]:
@@ -101,10 +75,10 @@ class FeishuBitable:
         初始化飞书连接
 
         参数:
-            config_path: 配置文件路径，如不指定则自动查找
+            config_path: 配置文件路径，默认为项目根目录下的 feishu_config.json
         """
         if config_path is None:
-            config_path = get_config_path()
+            config_path = Path.home() / "Desktop" / "stock-master" / "feishu_config.json"
         else:
             config_path = Path(config_path)
 

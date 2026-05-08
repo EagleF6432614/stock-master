@@ -118,7 +118,7 @@ Alpha Vantage MCP 调用链：
 用户: "创建持仓表格" / "分析我的持仓" / "更新持仓价格"
 ```
 
-**默认 Excel 路径**: `/Users/liyanda/Desktop/AI编程/stock master/my_portfolio.xlsx`
+**默认 Excel 路径**: `~/Desktop/stock-master/my_portfolio.xlsx`
 
 ### 3. 对比多只股票
 ```
@@ -142,7 +142,7 @@ Alpha Vantage MCP 调用链：
 | 持仓管理 | 持仓记录 | tblHkx30pGT1QzOq |
 | 交易记录 | 买卖历史 | tblTnlPDFmr5gmSV |
 
-**配置文件**: `/Users/liyanda/Desktop/AI编程/stock master/feishu_config.json`
+**配置文件**: `~/Desktop/stock-master/feishu_config.json`（参考根目录的 `feishu_config.example.json`）
 
 **同步逻辑**: 本地分析 → 飞书（单向，飞书为主库）
 
@@ -181,7 +181,7 @@ Alpha Vantage MCP 调用链：
 | 趋势线 | 上升/下降趋势线 | 关闭 |
 | 斐波那契 | Fib 回撤/扩展 PriceLine | 关闭 |
 
-**报告保存路径**: `~/Desktop/AI编程/stock master/reports/TICKER_YYYYMMDD_HHMM.html`
+**报告保存路径**: `./reports/TICKER_YYYYMMDD_HHMM.html`
 
 **技术实现**: `scripts/html_report.py` — HTMLReportGenerator 类
 - 使用 TradingView Lightweight Charts v4 (CDN, Apache 2.0 开源)
@@ -226,7 +226,7 @@ path = generate_html_report(ticker, name, analysis_result, signal, stock_data)
 - AI 核心判断（宏观 + 加密 + 操作建议）
 - Top 10 新闻（带分类标签、摘要、操作建议、原文链接）
 
-**报告保存路径**: `~/Desktop/AI编程/stock master/reports/market_dashboard_YYYYMMDD.html`
+**报告保存路径**: `./reports/market_dashboard_YYYYMMDD.html`
 
 **调用方式**:
 ```python
@@ -237,6 +237,96 @@ path = generate_market_dashboard()
 
 **数据来源**: Day1 Global (brief.day1global.xyz) — Finnhub, Yahoo Finance, OKX, CoinGlass, Claude AI
 **注意**: 数据源为第三方非公开 API，如不可用会提示错误，不影响其他功能。
+
+### 7. Polymarket 预测市场 [v4.4]
+
+**触发词**:
+- 看盘 / 找标的：`polymarket 热门` / `polymarket 上有什么好的` / `看看预测市场`
+- 分类浏览：`polymarket 政治类` / `加密类预测市场` / `体育预测`
+- 新上线：`polymarket 最近新上的` / `polymarket 新市场`
+- 搜索：`polymarket 上搜 bitcoin` / `polymarket 找 trump`
+- 单市场基础深度：`深度解读 <slug>` / `这个 polymarket 的市场详细分析`
+- **Claude 深度解读（核心智能流程）**：`深度解读 polymarket 市场: <slug>` ← 主看板按钮复制的 prompt
+- 整体看板：`polymarket 看板` / `polymarket 整体分析` / `polymarket dashboard`
+- 飞书关注：`关注这个 polymarket` / `加入 polymarket 关注列表` / `刷新 polymarket 关注`
+
+#### Claude 深度解读流程（重要）
+
+当用户发送 `深度解读 polymarket 市场: <slug>` 或主看板按钮复制的同等 prompt 时，**必须按以下步骤执行**：
+
+1. **拉取数据**（不要简化）：
+   ```python
+   from polymarket_analyzer import analyze_market_depth
+   data = analyze_market_depth(slug)
+   # data 包含: market, history (530+ 价格点), holders, trades, signals, interp, ai
+   ```
+
+2. **基于真实数据，由 Claude（你）亲自撰写一份 markdown 深度解读**，结构建议：
+   - **市场概况**：用一段话讲清这个市场在赌什么、为什么有人下注
+   - **当前定价是否合理**：基于价格历史 + 资金流向 + 大户行为，判断市场共识是否过度乐观/悲观
+   - **关键变量**：影响结算的 2-3 个核心变量（人物动态、政策时点、链上数据等）
+   - **可能的反转剧本**：什么事件会让 YES/NO 概率发生 ≥ 10pp 的变化
+   - **类比与参照**：历史上类似预测市场的结算特征
+   - **执行建议**：基于以上分析给出"偏多/偏空/观望"的结论 + 一两句话理由
+
+   写作要求：
+   - **观点明确**，避免"可能/或许/也许"等无实质内容的铺陈
+   - **引用具体数字**：YES Top5 集中度 67% / 7天-22.9% / 距结算54天，不要泛泛说"高/低"
+   - **写作风格**：少废话，结论先行；专业术语建议英文+括号释义；避免"可能/或许/也许"等无实质内容的铺陈；不和稀泥
+
+   ⚠️ **重要数据陷阱**：
+   - `endDate` / `trading_end_date` 字段 = market 停止接受订单的时间，**不一定等于 question 里赌的日期**。Polymarket 很多市场是"提前 resolve 型"——条件触发就立刻结，否则继续挂着等问题里的日期
+   - 例：market `microstrategy-sells-any-bitcoin-by-december-31-2026`，question 写 12/31/2026，但 `endDate=2026-07-01` — 这是 trading 阶段截止/审查窗口，不是结算日
+   - **赌的实际日期看 `groupItemTitle` 字段（如 "December 31, 2026"）或 question 文本本身**
+   - 所以**永远不要用 endDate 去说"距结算还有 N 天"**，会误导用户。要说"距 trading 截止 N 天" 或直接看 question 标题
+
+3. **调用报告生成函数注入 markdown**：
+   ```python
+   from polymarket_market_report import generate_market_report
+   path = generate_market_report(slug, claude_analysis=your_markdown_text)
+   ```
+   HTML 报告会自动开浏览器，"🤖 Claude 深度解读"板块紧挨在头部下方，先于基础数据分析展示。
+
+4. **同时在对话里返回简短摘要**（2-3 句话），告知用户核心判断和报告链接。
+
+**功能与脚本路由**:
+
+| 用户意图 | 模块 | 函数 |
+|---------|------|------|
+| 看热门 | `polymarket_analyzer.py` | `list_trending_markets(limit=15)` |
+| 看新上线 | `polymarket_analyzer.py` | `list_new_markets(days=7)` |
+| 按分类浏览 | `polymarket_analyzer.py` | `list_by_category(cat)` cat=政治/加密/体育/地缘/科技/经济/娱乐 |
+| 关键词搜索 | `polymarket_analyzer.py` | `search_markets(keyword)` |
+| 单市场基础深度文本 | `polymarket_analyzer.py` | `analyze_market_depth(slug)` + `format_depth()` |
+| 整体看板 HTML（含🔍按钮） | `polymarket_dashboard.py` | `generate_dashboard()` — 自动开浏览器，每张卡片有"深度解读"按钮可一键复制 prompt |
+| 单市场深度 HTML | `polymarket_market_report.py` | `generate_market_report(slug, claude_analysis=md)` |
+| 添加飞书关注 | `polymarket_watchlist.py` | `add_to_watchlist(slug, category)` |
+| 列出飞书关注 | `polymarket_watchlist.py` | `list_watchlist()` + `format_watchlist()` |
+| 刷新飞书关注价格 | `polymarket_watchlist.py` | `refresh_watchlist()` |
+
+**调用建议（默认行为）**:
+- 用户问"看看 polymarket"或"上有啥好的" → 调 `polymarket_dashboard.generate_dashboard()` 出整体看板
+- 用户聚焦某个具体市场（提到 slug） → **走上述 Claude 深度解读流程**，不要只调 `generate_market_report` 不写 markdown
+- 用户只问列表 → 用 `format_*` 文本函数直接在对话里返回，不出 HTML
+- 用户说"关注" / "加到收藏" → 调 `add_to_watchlist`
+
+**深度报告 HTML 包含**（按从上到下的展示顺序）:
+1. 头部（市场标题 + 图标 + 24h/流动性 + 距结束）
+2. 当前概率（YES/NO 大卡片）
+3. **🤖 Claude 深度解读**（如有，紫色边框，markdown 渲染）
+4. **🧠 深度解读**（基础数据分析，4维评分卡片 + 综合判断 + 操作建议）
+5. 关键指标（24h/7d 变化、波动率、净流入、集中度）
+6. 价格历史曲线（Chart.js，YES 概率走势）
+7. 信号解读（人话翻译）
+8. 大户持仓 Top 5（YES/NO 各一列）
+9. 最近 15 笔成交流水
+10. 底部"在 Polymarket 打开 →"（纯蓝按钮）
+
+**飞书 watchlist 表**: 表名 `polymarket_watchlist`，首次调用自动建表
+
+**HTML 输出路径**: `./reports/`
+
+**数据源**: Polymarket Gamma + CLOB + Data API (公开，无需 auth)
 
 ## 风险提示（必须包含）
 
@@ -262,7 +352,7 @@ path = generate_market_dashboard()
 - 讨论心态问题时，引用心态与纪律章节
 - 风险提示时，引用风险警示内容
 
-**源文件**: `/Users/liyanda/Desktop/AI编程/stock master/股票交易智慧精粹.docx`
+**源文件**: `~/Desktop/stock-master/股票交易智慧精粹.docx`
 （用户可持续更新此文档，添加新感悟）
 
 ## 详细文档

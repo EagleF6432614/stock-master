@@ -24,6 +24,36 @@
 | v4.2 | 2026-02-24 | 交互增强 | 指标Toggle开关、评分明细表、小白解读卡片、关键价位表、操作建议 |
 | v4.2.1 | 2026-02-24 | 修复+智慧 | SR Toggle修复、投资智慧模块、HTML报告作补充不替代文字输出 |
 | v4.2.2 | 2026-02-25 | 智慧精简 | 投资智慧精简为1-2条、真实数据全功能验证通过 |
+| v4.3 | 2026-02-26 | 大盘看板 | 双 Tab 页面 + 独立大盘报告，Day1 Global 数据源 |
+| v4.4 | 2026-05-08 | Polymarket | 预测市场分析：看板/深度报告/飞书关注/Claude 深度解读 |
+
+---
+
+## v4.4 / v1.7 (2026-05-08) — Polymarket 预测市场分析
+
+### 新增: Polymarket 全功能模块
+- `polymarket_analyzer.py` — 数据拉取（Gamma + CLOB + Data API）、热门/新上线/分类/搜索/深度分析
+- `polymarket_dashboard.py` — 主看板 HTML（分类 Tabs + 热门 + 新上线 + 🔍深度解读按钮）
+- `polymarket_market_report.py` — 单市场深度报告 HTML（价格曲线/4维评分/大户持仓/成交流水）
+- `polymarket_watchlist.py` — 飞书关注列表（添加/刷新/列出）
+
+### 新增: Claude 深度解读流程
+- AI 拉取真实数据后亲自撰写 markdown 深度解读，注入 HTML 报告
+- 解读结构：市场概况/定价合理性/关键变量/反转剧本/类比/执行建议
+
+### 改进: 路径通用化
+- 所有脚本的 `DEFAULT_OUTPUT_DIR` 改为项目相对路径，不再依赖用户特定目录
+
+---
+
+## v4.3 / v1.6 (2026-02-26) — 大盘数据看板
+
+### 新增: 双 Tab 页面
+- 股票分析报告内嵌"股票分析" + "大盘数据"双 Tab，一键切换
+- 大盘数据：美股指数/黄金/加密/情绪面板/BTC链上信号/AI分析/Top10新闻
+
+### 新增: 独立大盘报告
+- `market_dashboard.py` — 从 Day1 Global API 拉取数据生成独立看板 HTML
 
 ---
 
@@ -248,7 +278,7 @@
 ## v3.4.1 (2026-01-22) — 更名
 
 - **重命名**: stock-analyzer → stock-master
-- **路径变更**: Excel 默认存储改为 `/Users/liyanda/Desktop/AI编程/stock master/`
+- **路径变更**: Excel 默认存储改为项目根目录
 
 ---
 

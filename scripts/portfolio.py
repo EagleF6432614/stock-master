@@ -33,7 +33,7 @@ def create_portfolio_template(output_path: str = None) -> str:
 
     if output_path is None:
         # 默认存储路径
-        default_dir = Path("/Users/liyanda/Desktop/AI编程/stock master")
+        default_dir = Path(__file__).resolve().parent.parent
         default_dir.mkdir(parents=True, exist_ok=True)
         output_path = default_dir / "my_portfolio.xlsx"
     else:

@@ -53,7 +53,7 @@ LIGHTWEIGHT_CHARTS_CDN = (
 TV_URL_TEMPLATE = "https://www.tradingview.com/chart/?symbol={symbol}"
 
 # 报告输出目录
-DEFAULT_OUTPUT_DIR = os.path.expanduser("~/Desktop/AI编程/stock master/reports")
+DEFAULT_OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "reports")
 
 
 def _format_date(dt) -> str:
